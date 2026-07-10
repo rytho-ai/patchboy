@@ -1,13 +1,15 @@
 # youtube-cli
 
 A thin CLI + Claude Code skill over `youtube-toolkit` — search, info,
-transcript, analyze, download, comments. Unlike `splice-cli`, there's no
-login/session/budget layer here: nothing needs a logged-in session. Most
-commands need no API key either — `search`/`info`/`transcript`/`analyze`/
-`download` all work with zero setup. Two things need a Data API key from
-Google Cloud Console (`YOUTUBE_API_KEY`), not a login: `search --api`
-(filtered/trending search) and `comments` (youtube-toolkit has no no-API
-fallback for comments, verified — it always calls the Data API).
+transcript, analyze, download, comments, channel, playlist, captions,
+formats, sponsorblock. Unlike `splice-cli`, there's no login/session/budget
+layer here: nothing needs a logged-in session. Every command except
+`comments` (and `search --api`) works with zero setup — no API key needed.
+Two things need a Data API key from Google Cloud Console
+(`YOUTUBE_API_KEY`), not a login: `search --api` (a bare keyword search
+against the Data API — not filtered or trending; `--sort` doesn't apply to
+it, see below) and `comments` (youtube-toolkit has no no-API fallback for
+comments, verified — it always calls the Data API).
 
 ## Why this exists
 
@@ -40,17 +42,58 @@ cp .env.example .env
 
 ```bash
 youtube search "<query>" [-n N] [--api] [--sort relevance|date|views|rating]
-youtube info <url> [--chapters]
+                         [--duration short|medium|long] [--upload-date hour|today|week|month|year]
+                         [--features hd,4k,live,cc,creative_commons,hdr] [--env FILE]
+youtube info <url> [--include chapters|heatmap|key_moments|transcript|lyrics ...] [--chapters]
 youtube transcript <url> [--lang en]
 youtube analyze <url>                 # 50+ metadata fields + engagement heatmap
-youtube download <url> [--audio|--video] [--sponsorblock] [--quality/--format]
-youtube comments <url> [-n N] [--order relevance|time]
+youtube download <url> [--audio|--video] [--bitrate best|320k|256k|192k|128k] [--prefer-yt-dlp]
+                       [--sponsorblock] [--sponsorblock-action remove|mark]
+                       [--sponsorblock-categories sponsor,intro,...]
+                       [--quality/--format] [--dest/-o DIR] [--env FILE]
+youtube comments <url> [-n N] [--order relevance|time] [--search TERM] [--env FILE]
+youtube channel <handle> [--videos|--shorts|--streams] [-n N] [--sort newest|oldest|popular]
+youtube playlist <url> [--videos [-n N]] [--download [--type audio|video] [--format FMT] [--dest/-o DIR]] [--env FILE]
+youtube captions <url> [--lang en] [--format srt|vtt|txt|json] [--dest/-o PATH]
+youtube formats <url>                 # available resolutions/codecs, pre-download planning
+youtube sponsorblock <url>            # preview sponsor/intro/outro segments, no download
 ```
 
-Six commands cover the common cases; `youtube-toolkit` has 40+ methods across
-its five sub-APIs (playlists, channels, live streams, key moments, lyrics,
-captions export, thumbnails, ...) — import it directly for anything not
-covered here rather than growing this CLI to mirror every method 1:1.
+`--env FILE` (on `search`, `download`, `comments`, `playlist`) points at a
+specific `.env` file instead of the default lookup. `--dest`/`-o` (on
+`download`, `playlist --download`, `captions`) sets the output
+directory/path, overriding `YOUTUBE_DOWNLOAD_DIR`.
+
+`--sort` only affects the default no-API `search` path — it's ignored (with
+a warning) when combined with `--api`. `--duration`/`--upload-date`/
+`--features` route `search` through `search.with_filters` (also no-API,
+no-quota) instead of `search.videos`; combined with `--api` they win and
+`--api` is ignored with a warning.
+
+`info --include` (repeatable or comma-separated) replaces the old
+`--chapters`-only wiring; `--chapters` still works as shorthand for
+`--include chapters`.
+
+Combining `--sponsorblock` with `--audio`, `--quality`, `--format`,
+`--bitrate`, or `--prefer-yt-dlp` on `download` prints a warning and ignores
+those flags — sponsorblock mode always cuts a video download.
+`--sponsorblock-action`/`--sponsorblock-categories` only apply in
+`--sponsorblock` mode.
+
+`channel --sort` only applies to `--videos` (the underlying sub-API doesn't
+accept a sort order for `--shorts`/`--streams`). `playlist --videos` returns
+plain video URLs unless the toolkit's `use_scrapetube` option is set (not
+exposed here) — the render handles both shapes. `playlist --download`'s
+`--type`/`--format`/`--dest` only apply with `--download`; `comments
+--search` searches within a single video's comments (separate from
+`search`, which finds videos).
+
+Twelve commands cover the common cases; `youtube-toolkit` still has methods
+across its five sub-APIs (live-stream download/status, thumbnails, filtered/
+archived/cookie-authenticated downloads, trending, categories/regions/
+languages, replies-to-a-comment, ...) not exposed here — import it directly
+for anything not covered rather than growing this CLI to mirror every method
+1:1.
 
 ## Layout
 
@@ -65,8 +108,13 @@ The Claude Code skill lives at `.claude/skills/youtube/SKILL.md`.
 
 ## Status
 
-- ✅ `search`, `info` (+ `--chapters`), `analyze`, `download` — verified
-  end-to-end against real videos.
+- ✅ `search`, `info` (+ `--chapters`/`--include`), `analyze`, `download` —
+  verified end-to-end against real videos.
+- ✅ `channel`, `playlist`, `captions`, `formats`, `sponsorblock` — wired
+  against confirmed sub-API signatures (`get.channel(.videos/.shorts/.streams)`,
+  `get.playlist(.videos)`, `download.playlist`, `download.captions`,
+  `get.formats`, `analyze.sponsorblock`); covered by mocked CliRunner tests,
+  not yet re-verified against real videos in this pass.
 - ✅ `comments` — verified it needs `YOUTUBE_API_KEY` (no no-API fallback
   exists in youtube-toolkit) and fails with a clean message without one.
 - ✅ `transcript` — fixed a real bug in youtube-toolkit along the way (see

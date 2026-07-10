@@ -21,8 +21,10 @@ def _expand(path: str) -> Path:
 
 @dataclass(frozen=True)
 class Settings:
-    # Only needed for `search` (Data API path) and `trending`. Every other
-    # command works with no key at all.
+    # Only needed for `search --api` (Data API path) and `comments` (no
+    # no-API fallback exists for comments in youtube-toolkit). Every other
+    # command (info, transcript, analyze, download, and default `search`)
+    # works with no key at all.
     api_key: str | None
     download_dir: Path
 
