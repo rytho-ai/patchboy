@@ -1,0 +1,10 @@
+mutation PurchaseAsset($uuid: GUID!) {
+  purchaseAsset(uuid: $uuid) {
+    ... on IAsset {
+      uuid
+      licensed
+      __typename
+    }
+    __typename
+  }
+}

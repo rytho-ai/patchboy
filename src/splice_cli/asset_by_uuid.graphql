@@ -1,0 +1,58 @@
+query AssetByUuid($uuid: GUID!) {
+  asset(uuid: $uuid) {
+    __typename
+    ... on IAsset {
+      uuid
+      name
+      asset_type_slug
+      licensed
+      asset_prices {
+        amount
+        currency
+        __typename
+      }
+      tags {
+        uuid
+        label
+        __typename
+      }
+      files {
+        uuid
+        name
+        path
+        asset_file_type_slug
+        url
+        __typename
+      }
+      __typename
+    }
+    ... on SampleAsset {
+      bpm
+      key
+      duration
+      catalog_uuid
+      __typename
+    }
+    ... on GeneratedSampleAsset {
+      bpm
+      key
+      duration
+      catalog_uuid
+      __typename
+    }
+    ... on PresetAsset {
+      catalog_uuid
+      __typename
+    }
+    ... on PackAsset {
+      catalog_uuid
+      __typename
+    }
+    ... on MidiAsset {
+      bpm
+      key
+      catalog_uuid
+      __typename
+    }
+  }
+}

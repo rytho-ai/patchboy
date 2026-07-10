@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "splice-cli"
+version = "0.1.0"
+description = "Unofficial Splice CLI for coding agents — search, preview, and download samples via Splice's own interface (no official MCP/API). Login relies on a human; no credentials handled."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+keywords = ["splice", "samples", "audio", "download", "music-production", "agent"]
+authors = [
+    {name = "Bo-Yu Chen", email = "bernie40916@gmail.com"}
+]
+
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.6",
+    "typer>=0.12",
+    "rich>=13.7",
+    "python-dotenv>=1.0",
+    # Chromium-family cookie decryption (Chrome/Chromium/Brave/Edge). Firefox
+    # needs no dependency, but bundling this keeps `--browser chrome` one-step.
+    "browser-cookie3>=0.19",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+splice = "splice_cli.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/splice_cli"]
+# Ship the captured GraphQL query alongside the code.
+artifacts = ["src/splice_cli/*.graphql"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
