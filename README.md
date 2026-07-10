@@ -80,10 +80,10 @@ those flags — sponsorblock mode always cuts a video download.
 `--sponsorblock-action`/`--sponsorblock-categories` only apply in
 `--sponsorblock` mode.
 
-`channel --sort` only applies to `--videos` (the underlying sub-API doesn't
-accept a sort order for `--shorts`/`--streams`). `playlist --videos` returns
-plain video URLs unless the toolkit's `use_scrapetube` option is set (not
-exposed here) — the render handles both shapes. `playlist --download`'s
+`channel --sort` (newest|oldest|popular) applies to `--videos`, `--shorts`,
+and `--streams`. `playlist --videos` returns full video detail (title, views,
+…) via the toolkit's scrapetube path, degrading to `{url, video_id}` when
+scrapetube isn't installed. `playlist --download`'s
 `--type`/`--format`/`--dest` only apply with `--download`; `comments
 --search` searches within a single video's comments (separate from
 `search`, which finds videos).

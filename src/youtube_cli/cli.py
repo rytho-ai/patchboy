@@ -363,7 +363,8 @@ def channel(
     streams: bool = typer.Option(False, "--streams", help="List the channel's live streams."),
     limit: int = typer.Option(20, "--limit", "-n"),
     sort: str = typer.Option(
-        "newest", "--sort", help="newest|oldest|popular (--videos only; shorts/streams don't sort)."
+        "newest", "--sort",
+        help="newest|oldest|popular (applies to --videos/--shorts/--streams).",
     ),
 ) -> None:
     """Get channel metadata, or list its videos/shorts/streams."""
@@ -371,25 +372,26 @@ def channel(
         console.print("[red]Choose only one of --videos/--shorts/--streams.[/]")
         raise typer.Exit(1)
 
+    if (videos or shorts or streams) and sort not in _CHANNEL_SORT:
+        console.print(
+            f"[red]Invalid --sort '{escape(sort)}'. Choose one of: "
+            "newest, oldest, popular.[/]"
+        )
+        raise typer.Exit(1)
+
     toolkit = _toolkit()
 
     if videos:
-        if sort not in _CHANNEL_SORT:
-            console.print(
-                f"[red]Invalid --sort '{escape(sort)}'. Choose one of: "
-                "newest, oldest, popular.[/]"
-            )
-            raise typer.Exit(1)
         with _handle():
             items = toolkit.get.channel.videos(handle, limit=limit, sort_by=sort)
         console.print(render.channel_items_table(handle, "videos", items))
     elif shorts:
         with _handle():
-            items = toolkit.get.channel.shorts(handle, limit=limit)
+            items = toolkit.get.channel.shorts(handle, limit=limit, sort_by=sort)
         console.print(render.channel_items_table(handle, "shorts", items))
     elif streams:
         with _handle():
-            items = toolkit.get.channel.streams(handle, limit=limit)
+            items = toolkit.get.channel.streams(handle, limit=limit, sort_by=sort)
         console.print(render.channel_items_table(handle, "streams", items))
     else:
         with _handle():
@@ -427,7 +429,9 @@ def playlist(
 
     if videos:
         with _handle():
-            items = toolkit.get.playlist.videos(url, limit=limit)
+            # use_scrapetube=True → real video detail (title/views/…) in one
+            # scrape; degrades to {url, video_id} dicts if scrapetube is absent.
+            items = toolkit.get.playlist.videos(url, limit=limit, use_scrapetube=True)
         console.print(render.playlist_videos_table(url, items))
         return
 

@@ -357,22 +357,34 @@ def test_channel_shorts_flag_reaches_sub_api(monkeypatch):
     toolkit = _patch_toolkit(monkeypatch)
     toolkit.get.channel.shorts.return_value = []
 
-    result = runner.invoke(cli.app, ["channel", "@cool", "--shorts", "-n", "3"])
+    result = runner.invoke(cli.app, ["channel", "@cool", "--shorts", "-n", "3", "--sort", "popular"])
 
     assert result.exit_code == 0
     args, kwargs = toolkit.get.channel.shorts.call_args
     assert args[0] == "@cool"
     assert kwargs["limit"] == 3
+    assert kwargs["sort_by"] == "popular"  # --sort now applies to shorts too
 
 
 def test_channel_streams_flag_reaches_sub_api(monkeypatch):
     toolkit = _patch_toolkit(monkeypatch)
     toolkit.get.channel.streams.return_value = []
 
-    result = runner.invoke(cli.app, ["channel", "@cool", "--streams"])
+    result = runner.invoke(cli.app, ["channel", "@cool", "--streams", "--sort", "oldest"])
 
     assert result.exit_code == 0
-    toolkit.get.channel.streams.assert_called_once()
+    _, kwargs = toolkit.get.channel.streams.call_args
+    assert kwargs["sort_by"] == "oldest"  # --sort now applies to streams too
+
+
+def test_channel_invalid_sort_with_shorts_exits_clean(monkeypatch):
+    toolkit = _patch_toolkit(monkeypatch)
+
+    result = runner.invoke(cli.app, ["channel", "@cool", "--shorts", "--sort", "bogus"])
+
+    assert result.exit_code == 1
+    assert "Invalid --sort" in result.output
+    toolkit.get.channel.shorts.assert_not_called()
 
 
 def test_channel_mutually_exclusive_flags_exit_clean(monkeypatch):
@@ -418,7 +430,9 @@ def test_playlist_metadata_calls_get_playlist(monkeypatch):
 
 def test_playlist_videos_flag_reaches_sub_api(monkeypatch):
     toolkit = _patch_toolkit(monkeypatch)
-    toolkit.get.playlist.videos.return_value = ["https://youtube.com/watch?v=1"]
+    toolkit.get.playlist.videos.return_value = [
+        {"url": "https://youtube.com/watch?v=1", "video_id": "1", "title": "Vid"}
+    ]
 
     result = runner.invoke(
         cli.app, ["playlist", "https://youtube.com/playlist?list=abc", "--videos", "-n", "5"]
@@ -428,6 +442,7 @@ def test_playlist_videos_flag_reaches_sub_api(monkeypatch):
     args, kwargs = toolkit.get.playlist.videos.call_args
     assert args[0] == "https://youtube.com/playlist?list=abc"
     assert kwargs["limit"] == 5
+    assert kwargs["use_scrapetube"] is True  # CLI opts into rich detail
 
 
 def test_playlist_download_flag_reaches_download_playlist(monkeypatch):

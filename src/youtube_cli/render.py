@@ -185,11 +185,9 @@ def playlist_panel(info: dict[str, Any]) -> Table:
 
 
 def playlist_videos_table(url: str, items: list[Any]) -> Table:
-    """Render toolkit.get.playlist.videos()'s result.
-
-    Without ``use_scrapetube=True`` (not exposed as a CLI flag), this falls
-    back to a bare list of URL strings rather than video-detail dicts — handle
-    both shapes so the render doesn't crash on the plain-URL case.
+    """Render toolkit.get.playlist.videos()'s result — always a list of dicts
+    now (rich detail with scrapetube, else minimal ``{url, video_id}``). The
+    bare-string branch is kept as a defensive fallback for older shapes.
     """
     table = Table(title=f"Playlist videos ({len(items)} shown)")
     if items and isinstance(items[0], dict):
