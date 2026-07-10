@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+*.egg-info/
+
+# API key
+.env
+
+# Downloaded media
+downloads/
+*.mp3
+*.mp4
+*.wav
+*.m4a
+*.webm
