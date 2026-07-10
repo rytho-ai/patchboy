@@ -35,9 +35,11 @@ dev = [
 youtube = "youtube_cli.cli:app"
 
 [tool.uv.sources]
-# Local monorepo package, not the unrelated same-named package on PyPI
-# (that one only goes up to 0.2.0; this is our own 2.0.1).
-youtube-toolkit = { path = "../youtube-toolkit" }
+# Our own youtube-toolkit (not the unrelated same-named package on PyPI,
+# which only goes up to 0.2.0; this is our own 2.0.1) — tracks main on
+# GitHub so youtube-cli installs standalone, without needing a sibling
+# checkout on disk.
+youtube-toolkit = { git = "https://github.com/rytho-ai/youtube-toolkit.git" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/youtube_cli"]
