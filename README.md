@@ -14,9 +14,32 @@ offers a sanctioned API, so this only ever talks to it.
 2. Add the redirect URI **`http://127.0.0.1/callback`** (portless — the CLI picks
    a free port at runtime). Spotify **rejects `localhost`**, so it must be the
    `127.0.0.1` literal.
-3. Copy `.env.example` → `.env` and set `SPOTIFY_CLIENT_ID` to the app's Client ID
-   (public, not a secret).
-4. Install: `uv venv && uv pip install -e .`
+3. Set `SPOTIFY_CLIENT_ID` (the app's Client ID — public, not a secret). Where you
+   put it depends on how you install (below).
+
+## Install — two entry paths
+
+**Global use** (`spotify` available from any directory):
+
+```bash
+uv tool install .
+mkdir -p ~/.spotify-cli && echo 'SPOTIFY_CLIENT_ID=<your id>' >> ~/.spotify-cli/.env
+```
+
+`Settings.load()` reads `~/.spotify-cli/.env` as a fallback, so a globally-installed
+`spotify` finds its Client ID from anywhere (needed because login/token-refresh
+require it). Alternatively export `SPOTIFY_CLIENT_ID` in your shell profile.
+
+**Development** (editable, run from the repo):
+
+```bash
+uv venv && uv pip install -e ".[dev]"
+cp .env.example .env    # put SPOTIFY_CLIENT_ID here
+uv run spotify ...
+```
+
+A project `.env` in the repo dir is picked up automatically in dev. Precedence:
+real env vars > project `.env` > `~/.spotify-cli/.env`.
 
 ## Usage
 

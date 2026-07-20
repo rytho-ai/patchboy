@@ -25,6 +25,14 @@ def _expand(path: str) -> Path:
     return Path(path).expanduser().resolve()
 
 
+# A home-dir .env so a globally-installed (`uv tool install`) `spotify` works from
+# ANY directory — SPOTIFY_CLIENT_ID is required for login/refresh, and the
+# CWD-relative `.env` only covers dev-run-from-the-repo. Unlike siblings we need
+# this: splice has no required credential, youtube's key is optional, but our
+# client_id is mandatory for token refresh.
+_GLOBAL_ENV = "~/.spotify-cli/.env"
+
+
 @dataclass(frozen=True)
 class Settings:
     client_id: str | None  # SPOTIFY_CLIENT_ID — required for login; None → guide the user
@@ -36,7 +44,12 @@ class Settings:
         if env_file is not None:
             load_dotenv(env_file, override=False)
         else:
+            # Precedence (override=False → first wins): real env vars > project
+            # .env (dev, run from the repo) > ~/.spotify-cli/.env (global use).
             load_dotenv(override=False)
+            home_env = Path(_GLOBAL_ENV).expanduser()
+            if home_env.is_file():
+                load_dotenv(home_env, override=False)
 
         return cls(
             client_id=os.environ.get("SPOTIFY_CLIENT_ID"),

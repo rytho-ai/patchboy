@@ -153,7 +153,14 @@ confirm each against a real account before removing the marker.
 ## Environment & tooling
 
 - **src layout (required)** — package under `src/spotify_cli/`.
-- **`uv` first** — `uv venv`, `uv run pytest`, `uv pip install -e ".[dev]"`.
+- **`uv` first, two entry paths** — daily use is `uv tool install .` then a bare
+  `spotify` from anywhere; development is `uv run …` + `uv pip install -e ".[dev]"`
+  from the repo. Both are first-class. Because `SPOTIFY_CLIENT_ID` is **required**
+  for login/refresh (unlike splice's no-credential and youtube's optional-key
+  configs), `Settings.load()` reads a home-dir `~/.spotify-cli/.env` as a fallback
+  so global use works from any directory without a project `.env`. Precedence:
+  real env vars > project `.env` (dev) > `~/.spotify-cli/.env` (global). Don't
+  regress that fallback — it's what makes `uv tool install` usable.
 - Tests mock at the client boundary; do NOT hit the network in unit tests. Worth
   covering: PKCE pair correctness, session atomic save/load + 0600, refresh
   fallback when no new refresh_token, JSON→model maps against captured fixtures,
