@@ -7,8 +7,8 @@ search/download/buy/stack; Splice's private GraphQL API is kept minimal,
 reserved for capability gaps MCP doesn't cover (typed search, "my library"
 filter, free preview-audio fetch) and as a break-glass fallback. Library-
 first: a clean Python core (`SpliceClient` for GraphQL, `McpClient` for MCP)
-with a thin `splice` CLI and a Claude Code skill on top, so an agent
-(Digger/TrackMate) can import the same core in-process.
+with a thin `splice` CLI and a Claude Code skill on top, so agents and other
+tools can import the same core in-process.
 
 Design commitments:
 
@@ -100,15 +100,24 @@ The Claude Code skill lives at `.claude/skills/splice/SKILL.md`.
 
 ## Setup
 
+For daily use, install the CLI once with uv's tool installer:
+
 ```bash
 cd packages/splice-cli
-uv venv && uv pip install -e .
+uv tool install .
+splice --help
+```
 
-# MCP (default backend for search/download/buy/stack) — one-time OAuth grant:
+MCP is the default backend for search/download/buy/stack. Authorize it once:
+
+```bash
 splice login --mcp
+```
 
-# GraphQL (capability-gap / break-glass backend) — log into splice.com in
-# your browser first, then:
+For GraphQL capability gaps or break-glass fallback, log into splice.com in
+your browser first, then lift that browser session:
+
+```bash
 splice login
 ```
 

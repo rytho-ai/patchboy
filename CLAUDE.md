@@ -152,7 +152,8 @@ src/splice_cli/
 - **src layout (required)** — package under `src/splice_cli/`, never at repo
   root, so tests run against the installed package (kills "works locally,
   ImportError after install" bugs).
-- **`uv` first** — `uv venv`, `uv run pytest`, `uv pip install -e ".[dev]"`.
+- **`uv` first** — daily use is `uv tool install ...` then bare `splice`;
+  local development is `uv run pytest` plus `uv pip install -e ".[dev]"`.
   Reach for bare `pip` only when `uv` genuinely can't express it.
 - **Secrets never touch git or stdout.** Real session/token files live in
   `~/.splice-cli/` and are written atomically at 0600. `.gitignore` also
