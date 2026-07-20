@@ -96,8 +96,9 @@ upstream.
 ## Environment & tooling
 
 - **src layout (required)** — package under `src/youtube_cli/`.
-- **`uv` first** — `uv venv`, `uv run …`, `uv pip install -e .`. The
-  youtube-toolkit dep resolves from GitHub `main`; a fresh `uv pip install -e .`
+- **`uv` first** — daily use is `uv tool install ...` then bare `youtube`;
+  local development is `uv run ...` plus `uv pip install -e ".[dev]"`. The
+  youtube-toolkit dep resolves from GitHub `main`; a fresh editable install
   pulls it, no sibling checkout needed.
 - **Secrets:** the only credential is `YOUTUBE_API_KEY` (a config value, not a
   login). Never print it or let it land in a rendered table or error string.

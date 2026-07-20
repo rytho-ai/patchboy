@@ -23,9 +23,12 @@ nothing but argument parsing and rendering.
 
 ## Setup
 
+For daily use, install the CLI once with uv's tool installer:
+
 ```bash
 cd packages/youtube-cli
-uv venv && uv pip install -e .
+uv tool install .
+youtube --help
 ```
 
 Only needed for `search --api` and `comments` (every other command works
@@ -36,6 +39,13 @@ cp .env.example .env
 # then edit .env and fill in YOUTUBE_API_KEY
 # (Google Cloud Console → APIs & Services → Credentials → API key,
 #  with "YouTube Data API v3" enabled for that project)
+```
+
+For local development from this repository:
+
+```bash
+uv pip install -e ".[dev]"
+uv run youtube --help
 ```
 
 ## Commands
