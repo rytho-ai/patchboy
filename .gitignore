@@ -1,0 +1,17 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+*.egg-info/
+
+# Never commit real session/token material (also lives outside the repo in ~/.spotify-cli/)
+session.json
+*.session.json
+
+# Personal data pulls / experiments — not durable, not for git
+docs/taste.md
