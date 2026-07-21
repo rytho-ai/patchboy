@@ -10,7 +10,7 @@
 # per service that unifying them would be a wrong abstraction.
 
 [tool.uv.workspace]
-members = ["core", "spotify-cli", "applemusic-cli", "splice-cli", "youtube-cli"]
+members = ["core", "spotify-cli", "applemusic-cli", "splice-cli", "youtube-cli", "threads-cli"]
 
 [tool.uv.sources]
 # Our own youtube-toolkit (not the unrelated same-named package on PyPI, which

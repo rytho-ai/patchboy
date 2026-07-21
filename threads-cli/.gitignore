@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+*.egg-info/
+
+# Never commit real session/token material (also lives outside the repo in ~/.threads-cli/)
+session.json
+*.session.json

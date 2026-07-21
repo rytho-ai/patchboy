@@ -16,6 +16,7 @@ members = [
     "patchboy-core",
     "splice-cli",
     "spotify-cli",
+    "threads-cli",
     "youtube-cli",
 ]
 
@@ -2286,6 +2287,38 @@ provides-extras = ["dev"]
 name = "spotify-cli"
 version = "0.1.0"
 source = { editable = "spotify-cli" }
+dependencies = [
+    { name = "httpx" },
+    { name = "patchboy-core" },
+    { name = "python-dotenv" },
+    { name = "rich" },
+    { name = "typer" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
+    { name = "patchboy-core", editable = "core" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "rich", specifier = ">=13.7" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
+    { name = "typer", specifier = ">=0.12" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "threads-cli"
+version = "0.1.0"
+source = { editable = "threads-cli" }
 dependencies = [
     { name = "httpx" },
     { name = "patchboy-core" },
