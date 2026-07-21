@@ -102,6 +102,36 @@ underlying endpoint actually exists and is in scope for a personal-use app;
 the docs surveyed to build this CLI did not surface one. Say this plainly in
 any UX/help text that could otherwise imply broader read access than exists.
 
+### Unofficial (private-API) backend — probed 2026-07-21, REJECTED. Don't re-litigate.
+
+The feed / other-users / search / mentions gap above is only fillable via the
+UNOFFICIAL private API (log in with Instagram credentials, hit Threads' app
+API — the `instagrapi` / `Danie1-threads-api` lineage). We probed whether to
+add it as a caged second backend (à la splice-cli's official-default +
+break-glass GraphQL). **Verdict: do not add it.** Not merely "too risky" —
+**there is nothing alive to build on**, verified with ZERO account risk (a
+public, no-login reproduction from a datacenter IP):
+
+- **Threads moved domains: `threads.net` → `threads.com`.** Every 2023 lib
+  hardcodes the dead `threads.net`; step 1 (`GET /@user`) 302s to the new host.
+- **All the libraries are 2023 corpses** — `Danie1/threads-api`,
+  `junhoyeo/threads-api` + `threads-py`, `threads-net` are archived/dead since
+  ~2023, several explicitly after a Meta cease-and-desist. `Danie1/threads-api`
+  won't even import on a 2026 stack (Pydantic-v1 field names rejected by
+  Pydantic 2, which its own `instagrapi` backing forces). `instagrapi`'s
+  "threads" is Instagram DMs, not the Threads app.
+- **The page shape changed** — the 2023 `user_id`/token scrape patterns no
+  longer match `threads.com`, so you can't even reach the GraphQL layer to test
+  a (long-since-rotated) `doc_id`.
+
+So the unofficial route is now a **from-scratch reverse-engineering project**
+against `threads.com` (rediscover endpoints / `doc_id`s / auth) + perpetual
+maintenance vs Meta's rotation + **Med-High account-ban risk that is borne by
+the user's Instagram account** (a Threads login IS an Instagram login). That is
+a deliberate, separately-scoped, risk-accepted project — NOT a quick backend.
+**The official OAuth flow is the only backend; keep it that way** unless the
+owner explicitly takes on that reverse-engineering project with eyes open.
+
 ## Human-in-the-loop — the exit-code convention
 
 - **0** — ok.
