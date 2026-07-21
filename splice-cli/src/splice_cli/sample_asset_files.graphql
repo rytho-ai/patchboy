@@ -1,0 +1,16 @@
+query SampleAssetFiles($assetUuid: GUID!, $legacy: AssetLegacyInput) {
+  asset: asset(uuid: $assetUuid, legacy: $legacy) {
+    __typename
+    ... on SampleAsset {
+      files(includeSource: true) {
+        uuid
+        name
+        url
+        asset_file_type_slug
+        path
+        __typename
+      }
+      __typename
+    }
+  }
+}

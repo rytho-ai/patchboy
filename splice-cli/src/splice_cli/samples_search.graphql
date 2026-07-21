@@ -1,0 +1,197 @@
+query SamplesSearch($attributes: [AssetAttributeSlug!], $parent_asset_uuid: GUID, $query: String, $order: SortOrder = DESC, $sort: AssetSortType = popularity, $random_seed: String, $tags: [ID], $key: String, $chord_type: String, $bpm: String, $min_bpm: Int, $max_bpm: Int, $limit: Int = 50, $asset_category_slug: AssetCategorySlug, $page: Int = 1, $ac_uuid: String, $parent_asset_type: AssetTypeSlug, $licensed: Boolean, $liked: Boolean, $filepath: String, $asset_type_slug: AssetTypeSlug!) {
+  assetsSearch(
+    filter: {attributes: $attributes, legacy: true, published: true, asset_type_slug: $asset_type_slug, query: $query, filepath: $filepath, tag_ids: $tags, key: $key, chord_type: $chord_type, bpm: $bpm, min_bpm: $min_bpm, max_bpm: $max_bpm, asset_category_slug: $asset_category_slug, ac_uuid: $ac_uuid, licensed: $licensed, liked: $liked}
+    children: {parent_asset_uuid: $parent_asset_uuid}
+    pagination: {page: $page, limit: $limit}
+    sort: {sort: $sort, order: $order, random_seed: $random_seed}
+    legacy: {parent_asset_type: $parent_asset_type}
+  ) {
+    ...assetDetails
+    __typename
+  }
+}
+
+fragment assetDetails on AssetPage {
+  ...assetPageItems
+  ...assetTagSummaries
+  pagination_metadata {
+    currentPage
+    totalPages
+    __typename
+  }
+  response_metadata {
+    records
+    __typename
+  }
+  __typename
+}
+
+fragment assetPageItems on AssetPage {
+  items {
+    ... on IAsset {
+      asset_type_slug
+      liked
+      licensed
+      asset_prices {
+        amount
+        currency
+        __typename
+      }
+      uuid
+      name
+      tags {
+        uuid
+        label
+        __typename
+      }
+      files {
+        uuid
+        name
+        hash
+        path
+        asset_file_type_slug
+        url
+        __typename
+      }
+      __typename
+    }
+    ... on IAssetChild {
+      parents(filter: {asset_type_slug: pack}) {
+        items {
+          ... on PackAsset {
+            permalink_slug
+            permalink_base_url
+            uuid
+            name
+            files {
+              uuid
+              path
+              asset_file_type_slug
+              url
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    ... on SampleAsset {
+      bpm
+      chord_type
+      key
+      duration
+      uuid
+      name
+      asset_category_slug
+      catalog_uuid
+      attributes
+      __typename
+    }
+    ... on GeneratedSampleAsset {
+      bpm
+      chord_type
+      key
+      duration
+      uuid
+      name
+      asset_category_slug
+      catalog_uuid
+      attributes
+      created_at
+      sampleParent: parents(filter: {asset_type_slug: sample}) {
+        items {
+          ... on SampleAsset {
+            catalog_uuid
+            parents(filter: {asset_type_slug: pack}) {
+              items {
+                ... on PackAsset {
+                  uuid
+                  name
+                  permalink_slug
+                  permalink_base_url
+                  files {
+                    uuid
+                    path
+                    asset_file_type_slug
+                    url
+                    __typename
+                  }
+                  __typename
+                }
+                __typename
+              }
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    ... on PresetAsset {
+      uuid
+      name
+      catalog_uuid
+      attributes
+      asset_devices {
+        uuid
+        device {
+          name
+          uuid
+          minimum_device_version
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    ... on PackAsset {
+      uuid
+      name
+      catalog_uuid
+      provider {
+        name
+        permalink_slug
+        __typename
+      }
+      provider_uuid
+      uuid
+      permalink_slug
+      permalink_base_url
+      main_genre
+      __typename
+    }
+    ... on MidiAsset {
+      catalog_uuid
+      description
+      key
+      bpm
+      __typename
+    }
+    __typename
+  }
+  __typename
+}
+
+fragment assetTagSummaries on AssetPage {
+  tag_summary {
+    count
+    tag {
+      uuid
+      label
+      taxonomy {
+        uuid
+        name
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+  __typename
+}

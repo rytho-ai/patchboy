@@ -1,0 +1,11 @@
+query SubscriptionStoreQuery($group: PlanGroupSlug) {
+  currentSubscription: subscription(group: $group) {
+    ... on PlanSubscription {
+      uuid
+      state
+      credits
+      __typename
+    }
+    __typename
+  }
+}
