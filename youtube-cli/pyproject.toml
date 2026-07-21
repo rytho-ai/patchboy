@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "youtube-cli"
+version = "0.1.0"
+description = "Thin CLI + agent skill over youtube-toolkit — search, info, transcript, analyze, download, comments."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+keywords = ["youtube", "cli", "agent"]
+authors = [
+    {name = "Bo-Yu Chen", email = "bernie40916@gmail.com"}
+]
+
+dependencies = [
+    "youtube-toolkit",
+    "typer>=0.12",
+    "rich>=13.7",
+    "python-dotenv>=1.0",
+    # youtube-toolkit now declares this itself (see its pyproject.toml) —
+    # listed here too since uv doesn't always resolve transitive deps into
+    # the same venv for path dependencies during editable installs.
+    "youtube-transcript-api>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+youtube = "youtube_cli.cli:app"
+
+[tool.uv.sources]
+# Our own youtube-toolkit (not the unrelated same-named package on PyPI,
+# which only goes up to 0.2.0; this is our own 2.0.1) — tracks main on
+# GitHub so youtube-cli installs standalone, without needing a sibling
+# checkout on disk.
+youtube-toolkit = { git = "https://github.com/rytho-ai/youtube-toolkit.git" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/youtube_cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[[tool.mypy.overrides]]
+# our own dep, ships no py.typed marker yet — cover submodules too
+# (cli.py deep-imports youtube_toolkit.oauth / .handlers.youtube_api_handler
+# for the typed OAuth errors)
+module = ["youtube_toolkit", "youtube_toolkit.*"]
+ignore_missing_imports = true
