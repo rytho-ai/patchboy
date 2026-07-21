@@ -9,8 +9,8 @@ import time
 
 import pytest
 
-from apple_music_cli import auth
-from apple_music_cli.auth import AppleMusicAuthError, AppleMusicSession
+from applemusic_cli import auth
+from applemusic_cli.auth import AppleMusicAuthError, AppleMusicSession
 
 
 def _jwt(exp: float | None) -> str:

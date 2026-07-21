@@ -8,7 +8,7 @@
 # handler, rich render helpers, the OAuth loopback mechanics).
 
 [tool.uv.workspace]
-members = ["spotify-cli", "apple-music-cli", "splice-cli", "youtube-cli"]
+members = ["spotify-cli", "applemusic-cli", "splice-cli", "youtube-cli"]
 
 [tool.uv.sources]
 # Our own youtube-toolkit (not the unrelated same-named package on PyPI, which

@@ -1,4 +1,4 @@
-"""apple-music-cli — Apple Music API CLI for coding agents.
+"""applemusic-cli — Apple Music API CLI for coding agents.
 
 Catalog search + your own library (playlists, saved songs) over Apple Music's
 `api.music.apple.com`. Thin-shell shape (cli → client → render) borrowed from

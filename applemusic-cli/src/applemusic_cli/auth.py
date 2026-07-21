@@ -87,7 +87,7 @@ class AppleMusicSession:
         if not self.media_user_token:
             raise AppleMusicAuthError(
                 "This is a personal-library request but you're not logged in "
-                "(no media-user-token). Run `apple-music login`."
+                "(no media-user-token). Run `applemusic login`."
             )
         return {
             "authorization": f"Bearer {self.developer_token}",

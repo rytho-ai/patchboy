@@ -17,7 +17,7 @@ Each is its own installable package with its own bare command:
 | CLI | command | reaches |
 |---|---|---|
 | `spotify-cli` | `spotify` | Spotify Web API — catalog + your library |
-| `apple-music-cli` | `apple-music` | Apple Music — catalog + your library |
+| `applemusic-cli` | `applemusic` | Apple Music — catalog + your library |
 | `splice-cli` | `splice` | Splice samples — search / preview / buy / stacks |
 | `youtube-cli` | `youtube` | YouTube — search/download/transcript + your own channel (OAuth) |
 
@@ -48,7 +48,7 @@ cd spotify-cli && uv run pytest    # each member keeps its own tests
 patchboy/
 ├── pyproject.toml     # virtual workspace root (members + shared git sources)
 ├── spotify-cli/       # each member: own pyproject, [project.scripts], src, tests,
-├── apple-music-cli/   #   CLAUDE.md, README, .claude/skills/ — the caged wire
+├── applemusic-cli/   #   CLAUDE.md, README, .claude/skills/ — the caged wire
 ├── splice-cli/        #   knowledge (each service's client.py) stays per-member.
 └── youtube-cli/
 ```

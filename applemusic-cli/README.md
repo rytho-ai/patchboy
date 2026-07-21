@@ -1,4 +1,4 @@
-# apple-music-cli
+# applemusic-cli
 
 A thin CLI over the **Apple Music API** (`api.music.apple.com`) for coding
 agents and humans — catalog search + your own library (playlists, saved songs,
@@ -29,13 +29,13 @@ Needs **all three** of these, or it can't return your data:
    yourself (normal browser sign-in); the CLI lifts the `media-user-token` cookie.
    The browser must be on the **same machine** as the CLI (the cookie store is
    local). Firefox works with no extra dependency; Chrome/Chromium/Brave/Edge
-   need the `[chrome]` extra (`pip install 'apple-music-cli[chrome]'`).
+   need the `[chrome]` extra (`pip install 'applemusic-cli[chrome]'`).
 2. **An _active_ Apple Music subscription** on that account — the consumer
    ~monthly plan (a **free trial counts**). This is separate from the login and
    from any developer membership. Without it, `/me/*` returns
    *400 Insufficient Privileges* — a structural Apple gate (library/history are
    subscriber features), not something this CLI or any workaround can bypass.
-3. **`apple-music login`** run once to lift and save the token (see below).
+3. **`applemusic login`** run once to lift and save the token (see below).
 
 > Rule of thumb: **catalog = zero setup; library = your browser login + an
 > active (or trial) Apple Music subscription.**
@@ -65,7 +65,7 @@ gets them the no-paid-membership way (Path B):
   user action. Valid ~6 months; re-scraped when stale.
 - **Media-user-token** — required only for your library (`/me/*`). This is the
   cookie Apple sets when you sign in to `music.apple.com`. You just **sign in in
-  your normal browser**, and `apple-music login` **lifts the cookie from that
+  your normal browser**, and `applemusic login` **lifts the cookie from that
   browser** (Firefox/Chrome/…) — no DevTools, no copy-paste. This is the single
   human-in-the-loop step (mirrors `splice-cli`'s browser cookie lift).
 
@@ -86,12 +86,12 @@ So **catalog commands work with zero setup**; only library commands need login.
 ## Install
 
 ```bash
-# Daily use — install once, then a bare `apple-music` from anywhere:
+# Daily use — install once, then a bare `applemusic` from anywhere:
 uv tool install .
 
 # Development — from the repo:
 uv venv && uv pip install -e ".[dev]"
-uv run apple-music --help
+uv run applemusic --help
 ```
 
 No credentials are required to start. Catalog commands work immediately.
@@ -102,20 +102,20 @@ No credentials are required to start. Catalog commands work immediately.
    ID, as usual). Play something so MusicKit sets the cookie.
 2. Run:
    ```bash
-   apple-music login                    # auto-detects your browser
-   apple-music login --browser firefox  # or name it: firefox|chrome|chromium|brave|edge
+   applemusic login                    # auto-detects your browser
+   applemusic login --browser firefox  # or name it: firefox|chrome|chromium|brave|edge
    ```
 
 It fetches the developer token for you, **lifts the `media-user-token` cookie
 from that browser**, validates it against a real `/me/storefront` call, adopts
 your account's storefront, and stores it `0600` in
-`~/.apple-music-cli/session.json`. No DevTools, no copy-paste.
+`~/.applemusic-cli/session.json`. No DevTools, no copy-paste.
 
 - **Firefox** needs no extra dependency (cookies are plain sqlite). **Chrome /
-  Chromium / Brave / Edge** need `pip install 'apple-music-cli[chrome]'` (their
+  Chromium / Brave / Edge** need `pip install 'applemusic-cli[chrome]'` (their
   cookie values are keyring-encrypted; `browser_cookie3` decrypts them).
 - If auto-lift can't find a session, `login` falls back to a manual paste prompt.
-- Non-interactive / agents: `apple-music login --token <value>`, or set
+- Non-interactive / agents: `applemusic login --token <value>`, or set
   `APPLE_MUSIC_USER_TOKEN` in the environment.
 - The browser must be on the **same machine** as the CLI (the cookie store is
   local). For remote/SSH, log in locally then ship the session or inject
@@ -124,25 +124,25 @@ your account's storefront, and stores it `0600` in
 ## Commands
 
 ```
-apple-music login [--browser B] [--token V]  # lift media-user-token from your logged-in browser
-apple-music status                            # session / token / storefront state
+applemusic login [--browser B] [--token V]  # lift media-user-token from your logged-in browser
+applemusic status                            # session / token / storefront state
 
 # catalog (read) — NO login required
-apple-music search "<query>" --type song,album,artist,playlist --limit 25
-apple-music song   <catalog_song_id>
-apple-music album  <catalog_album_id>
-apple-music artist <catalog_artist_id>
-apple-music playlist-get <catalog_playlist_id> [--since D] [--until D] [--release-year Y] [--artist NAME]
+applemusic search "<query>" --type song,album,artist,playlist --limit 25
+applemusic song   <catalog_song_id>
+applemusic album  <catalog_album_id>
+applemusic artist <catalog_artist_id>
+applemusic playlist-get <catalog_playlist_id> [--since D] [--until D] [--release-year Y] [--artist NAME]
 
 # your library — needs login
-apple-music my-playlists [--limit N]
-apple-music library [--limit N] [--since D] [--until D] [--release-year Y] [--artist NAME]
-apple-music library-add    <catalog_song_id> ...        # add catalog songs to library
-apple-music library-remove <library_song_id> ...        # remove by i.xxxx library id
-apple-music playlist-create "<name>" [--description "..."] [--song <catalog_id> ...]
-apple-music playlist-add   <library_playlist_id> <catalog_song_id> ...
-apple-music recent [--limit N]                           # recently played songs
-apple-music heavy-rotation [--limit N]                   # most-played mix
+applemusic my-playlists [--limit N]
+applemusic library [--limit N] [--since D] [--until D] [--release-year Y] [--artist NAME]
+applemusic library-add    <catalog_song_id> ...        # add catalog songs to library
+applemusic library-remove <library_song_id> ...        # remove by i.xxxx library id
+applemusic playlist-create "<name>" [--description "..."] [--song <catalog_id> ...]
+applemusic playlist-add   <library_playlist_id> <catalog_song_id> ...
+applemusic recent [--limit N]                           # recently played songs
+applemusic heavy-rotation [--limit N]                   # most-played mix
 ```
 
 ### ids: catalog vs library

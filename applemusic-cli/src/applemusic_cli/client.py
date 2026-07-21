@@ -89,7 +89,7 @@ class Client:
         if resp.status_code == 401 or (user and resp.status_code == 403):
             raise AppleMusicAuthError(
                 "Apple Music rejected the request (developer token stale, or your "
-                "media-user-token expired/insufficient). Run `apple-music login` again."
+                "media-user-token expired/insufficient). Run `applemusic login` again."
             )
         if resp.status_code == 429:
             ra = resp.headers.get("retry-after")

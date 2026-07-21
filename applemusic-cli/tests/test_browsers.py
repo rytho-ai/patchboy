@@ -7,8 +7,8 @@ import sqlite3
 
 import pytest
 
-from apple_music_cli import browsers
-from apple_music_cli.browsers import NoBrowserSessionError
+from applemusic_cli import browsers
+from applemusic_cli.browsers import NoBrowserSessionError
 
 
 def _make_firefox_db(path, rows: list[tuple]) -> None:

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import stat
 
-from apple_music_cli import session
-from apple_music_cli.auth import AppleMusicSession
+from applemusic_cli import session
+from applemusic_cli.auth import AppleMusicSession
 
 
 def test_save_load_roundtrip(tmp_path) -> None:

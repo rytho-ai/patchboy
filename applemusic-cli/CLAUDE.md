@@ -1,4 +1,4 @@
-# CLAUDE.md — Development principles for apple-music-cli
+# CLAUDE.md — Development principles for applemusic-cli
 
 Governance for Claude (or any AI assistant) working on this codebase. Same
 discipline as siblings `spotify-cli` (thin shell) and `splice-cli` (caged,
@@ -69,7 +69,7 @@ There is **no OAuth/PKCE** here. Two tokens reach the API, obtained two ways:
 - **Media-user-token** — required only for `/me/*` (the user's library). This is
   per-user: the cookie Apple sets on sign-in to `music.apple.com`. The user signs
   in in their normal browser and `browsers.py` **lifts the cookie** from the
-  browser's cookie store (`apple-music login [--browser …]`) — splice-cli's
+  browser's cookie store (`applemusic login [--browser …]`) — splice-cli's
   firefox.py/chrome.py pattern; Firefox is a plain sqlite read, Chromium needs
   `browser_cookie3`. Verified live 2026-07-21: `media-user-token` is a real
   cookie on `.music.apple.com` (len ~246), and a lifted one authed `/me/storefront`.
@@ -83,7 +83,7 @@ There is **no OAuth/PKCE** here. Two tokens reach the API, obtained two ways:
   exit-2 login handoff — re-login can't fix a subscription tier). So `login`
   validates against `/me/storefront` (subscription-free), not a library call.
 - **Secrets never touch git or stdout.** Tokens live at 0600 in
-  `~/.apple-music-cli/session.json`; print only freshness/presence, never a token.
+  `~/.applemusic-cli/session.json`; print only freshness/presence, never a token.
 
 ### verify-live markers
 
@@ -118,11 +118,11 @@ browser the user is already signed in on. The clean path:
 
 1. Ask the user to sign in to `music.apple.com` in their normal browser (and
    play something so MusicKit sets the cookie).
-2. Run `apple-music login` (auto-detects) or `--browser firefox|chrome|…`. It
+2. Run `applemusic login` (auto-detects) or `--browser firefox|chrome|…`. It
    fetches the developer token, lifts the `media-user-token` cookie, validates it
    with one real `/me/storefront` call, adopts the account's storefront, saves
    0600. (`--token`/`APPLE_MUSIC_USER_TOKEN` still work for a direct paste.)
-3. Verify with `apple-music status`.
+3. Verify with `applemusic status`.
 
 Two things you can't do: the browser sign-in itself (their Apple credentials),
 and the cookie-lift when the browser is on a *different* machine (the cookie
@@ -159,12 +159,12 @@ command help — keep it accurate.
 
 ## Environment & tooling
 
-- **src layout (required)** — package under `src/apple_music_cli/`.
+- **src layout (required)** — package under `src/applemusic_cli/`.
 - **`uv` first, two entry paths** — daily use is `uv tool install .` then a bare
-  `apple-music` from anywhere; development is `uv run …` + `uv pip install -e
+  `applemusic` from anywhere; development is `uv run …` + `uv pip install -e
   ".[dev]"` from the repo. Both are first-class. Unlike spotify-cli there is **no
   required credential**, so no home-dir `.env` is needed to start; the optional
-  `~/.apple-music-cli/.env` fallback only carries an env-injected
+  `~/.applemusic-cli/.env` fallback only carries an env-injected
   `APPLE_MUSIC_USER_TOKEN` / `APPLE_MUSIC_STOREFRONT` for global use.
 - Tests mock at the client/auth boundary; do NOT hit the network in unit tests.
   Worth covering: JWT `exp` parsing, the scrape against a captured bundle,

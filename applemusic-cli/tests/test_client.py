@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import pytest
 
-from apple_music_cli import client as client_module
-from apple_music_cli.auth import AppleMusicAuthError, AppleMusicSession
-from apple_music_cli.client import AppleApiError, AppleSubscriptionError, Client, RateLimited
-from apple_music_cli.models import Song
+from applemusic_cli import client as client_module
+from applemusic_cli.auth import AppleMusicAuthError, AppleMusicSession
+from applemusic_cli.client import AppleApiError, AppleSubscriptionError, Client, RateLimited
+from applemusic_cli.models import Song
 
 
 def _session(media: str | None = "mut") -> AppleMusicSession:

@@ -5,9 +5,9 @@ from __future__ import annotations
 
 from typer.testing import CliRunner
 
-from apple_music_cli import cli
-from apple_music_cli.auth import AppleMusicAuthError
-from apple_music_cli.models import SearchResults, Song
+from applemusic_cli import cli
+from applemusic_cli.auth import AppleMusicAuthError
+from applemusic_cli.models import SearchResults, Song
 
 runner = CliRunner()
 

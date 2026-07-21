@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from apple_music_cli import filters
-from apple_music_cli.filters import FilterError
-from apple_music_cli.models import LibrarySong, Song
+from applemusic_cli import filters
+from applemusic_cli.filters import FilterError
+from applemusic_cli.models import LibrarySong, Song
 
 
 def _item(added: str | None = None, release: str | None = None, artists: tuple[str, ...] = ()) -> LibrarySong:

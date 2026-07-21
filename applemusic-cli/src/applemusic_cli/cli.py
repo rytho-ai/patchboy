@@ -1,4 +1,4 @@
-"""The `apple-music` thin shell an agent drives: parse → auth/client → render →
+"""The `applemusic` thin shell an agent drives: parse → auth/client → render →
 exit code. No Apple wire knowledge here (that's caged in client.py/auth.py).
 
 Exit-code convention (agents key off it, same as sibling spotify-cli):
@@ -33,7 +33,7 @@ app = typer.Typer(add_completion=False, help="Apple Music API CLI — catalog se
 console = Console()
 
 _LOGIN_STEPS = (
-    "Run `apple-music login`. It will tell you how to copy your `media-user-token` "
+    "Run `applemusic login`. It will tell you how to copy your `media-user-token` "
     "from a signed-in music.apple.com browser tab and paste it back. Catalog "
     "commands (search/song/album/artist) work WITHOUT logging in."
 )
@@ -196,12 +196,12 @@ def status() -> None:
     settings = _settings()
     if not settings.session_path.exists():
         console.print(
-            "[yellow]No session yet.[/] Catalog commands still work; run `apple-music login` for your library."
+            "[yellow]No session yet.[/] Catalog commands still work; run `applemusic login` for your library."
         )
         raise typer.Exit(1)
     sess = session.load(settings.session_path)
     dev = "stale (will re-scrape on next call)" if sess.dev_token_expired() else "fresh"
-    lib = "yes" if sess.media_user_token else "no (catalog only — run `apple-music login`)"
+    lib = "yes" if sess.media_user_token else "no (catalog only — run `applemusic login`)"
     console.print(
         f"[green]Session found.[/] Developer token: {dev}. Library access: {lib}. "
         f"Storefront: {sess.storefront}. Session: {settings.session_path}"
@@ -332,7 +332,7 @@ def library_remove(
 ) -> None:
     """Remove songs from your library by LIBRARY id (needs login).
 
-    Takes the `i.xxxx` ids shown by `apple-music library`, not catalog ids.
+    Takes the `i.xxxx` ids shown by `applemusic library`, not catalog ids.
     """
     _mutate(
         lambda c: c.remove_from_library(tuple(library_song_ids)),

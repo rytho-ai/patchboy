@@ -10,7 +10,7 @@ Two cases, same as splice:
   - Firefox — cookies live in an UNENCRYPTED sqlite; a plain read, zero deps.
   - Chromium family (Chrome/Chromium/Brave/Edge) — values are AES-encrypted with
     a key in the OS keyring; `browser_cookie3` does that decryption (optional
-    dependency: `pip install 'apple-music-cli[chrome]'`).
+    dependency: `pip install 'applemusic-cli[chrome]'`).
 
 Verified live 2026-07-21: the token IS a real cookie on `.music.apple.com`
 (len ~246), liftable this way; a lifted token authed a real `/me/storefront`
@@ -132,7 +132,7 @@ def _from_chromium(browser: str) -> str:
         import browser_cookie3
     except ImportError as exc:
         raise AppleMusicAuthError(
-            f"--browser {browser} needs browser_cookie3: pip install 'apple-music-cli[chrome]' "
+            f"--browser {browser} needs browser_cookie3: pip install 'applemusic-cli[chrome]' "
             "(Firefox needs no extra dependency)."
         ) from exc
     loader = getattr(browser_cookie3, _CHROMIUM[browser])

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from apple_music_cli.config import Settings
+from applemusic_cli.config import Settings
 
 
 def test_defaults(monkeypatch) -> None:
