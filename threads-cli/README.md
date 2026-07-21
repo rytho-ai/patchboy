@@ -12,9 +12,10 @@ Sibling of `spotify-cli` (thin-shell shape, exit-code contract) and
 > **Status: ⏸ PARKED (scaffolded, not live-tested).** Complete and green
 > (ruff/mypy/57 tests, all mocked) but has NEVER run against a real Meta Threads
 > app — don't rely on it yet. The pick-it-up-later checklist (register the app,
-> live-test, and the `# verify-live` shapes to confirm) is in **`handoff.md`**.
-> Every endpoint/param shape below reflects the public docs as read on
-> 2026-07-21. See `CLAUDE.md` for the
+> live-test, and the `# verify-live` shapes to confirm) is the grounded plan
+> **`../docs/blueprints/plans/2026-07-21-threads-live-verify.md`** (board:
+> `../docs/blueprints/plan.md`). Every endpoint/param shape below reflects the
+> public docs as read on 2026-07-21. See `CLAUDE.md` for the
 > full list.
 
 ## What this CLI can't do (read this before assuming otherwise)

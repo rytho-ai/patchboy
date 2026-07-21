@@ -10,6 +10,9 @@ Named for the studio patchbay — the one panel where every external device plug
 in and gets routed. (The `-boy` is the persona: the little patch-boy who wires
 you into the outside world.)
 
+> **Status board / roadmap:** `docs/blueprints/plan.md` (shape convention) ·
+> architecture decisions: `docs/adr/`.
+
 ## Members
 
 Each is its own installable package with its own bare command:
