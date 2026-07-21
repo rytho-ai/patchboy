@@ -35,12 +35,8 @@ dev = [
 [project.scripts]
 youtube = "youtube_cli.cli:app"
 
-[tool.uv.sources]
-# Our own youtube-toolkit (not the unrelated same-named package on PyPI,
-# which only goes up to 0.2.0; this is our own 2.0.1) — tracks main on
-# GitHub so youtube-cli installs standalone, without needing a sibling
-# checkout on disk.
-youtube-toolkit = { git = "https://github.com/rytho-ai/youtube-toolkit.git" }
+# youtube-toolkit's git source is declared at the patchboy workspace root
+# (../pyproject.toml [tool.uv.sources]) so it applies workspace-wide.
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/youtube_cli"]
