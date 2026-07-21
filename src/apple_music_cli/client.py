@@ -36,6 +36,12 @@ from .models import (
 )
 
 _BASE = "https://api.music.apple.com/v1"
+# The web player's internal backend host. Almost everything works on the public
+# _BASE alias, but ONE operation doesn't: DELETE-from-library. Verified live
+# 2026-07-21 — `DELETE /me/library/songs/{id}` 401s (empty body) on _BASE yet
+# 204s on amp-api with the identical borrowed token. So library removal, and only
+# that, is routed here. Don't move other calls onto it without re-verifying.
+_AMP_BASE = "https://amp-api.music.apple.com/v1"
 
 # User-friendly singular → Apple's plural resource type (its `types=` param and
 # the keys under `results`). Caged so cli.py never has to know the plural forms.
@@ -77,9 +83,9 @@ class Client:
 
     # ---- low-level ---------------------------------------------------------
 
-    def _request(self, method: str, path: str, *, user: bool = False, **kw) -> dict:
+    def _request(self, method: str, path: str, *, user: bool = False, base: str = _BASE, **kw) -> dict:
         headers = self._session.user_headers if user else self._session.catalog_headers
-        resp = httpx.request(method, f"{_BASE}{path}", headers=headers, timeout=15, **kw)
+        resp = httpx.request(method, f"{base}{path}", headers=headers, timeout=15, **kw)
         if resp.status_code == 401 or (user and resp.status_code == 403):
             raise AppleMusicAuthError(
                 "Apple Music rejected the request (developer token stale, or your "
@@ -164,10 +170,11 @@ class Client:
         self._request("POST", "/me/library", user=True, params={"ids[songs]": ",".join(song_ids)})
 
     def remove_from_library(self, library_song_ids: tuple[str, ...]) -> None:
-        # verify-live: removal takes LIBRARY ids (the `i.xxxx` ones from
-        # `library_songs`), one DELETE each — Apple exposes no batch delete.
+        # Verified live 2026-07-21: removal takes LIBRARY ids (the `i.xxxx` ones
+        # from `library_songs`), one DELETE each (no batch delete), and MUST go to
+        # amp-api — the public host 401s this exact call. Returns 204.
         for lid in library_song_ids:
-            self._request("DELETE", f"/me/library/songs/{lid}", user=True)
+            self._request("DELETE", f"/me/library/songs/{lid}", user=True, base=_AMP_BASE)
 
     def create_playlist(
         self, name: str, *, description: str | None = None, song_ids: tuple[str, ...] = ()

@@ -87,18 +87,27 @@ There is **no OAuth/PKCE** here. Two tokens reach the API, obtained two ways:
 
 ### verify-live markers
 
-Path B rests on Apple's *un*documented surface. Two risks carry `# verify-live`:
+Path B rests on Apple's *un*documented surface. The standing risk:
 
 1. **The scrape** (`auth.fetch_developer_token`) targets the current
    `music.apple.com` bundle layout. If it starts returning nothing, Apple
    reshaped its JS — fix the regexes in `auth.py`; nothing above knows the token
    has a source.
-2. **The library write shapes** (`client.add_to_library` /
-   `remove_from_library` / `create_playlist` / `add_to_playlist`) are the
-   under-documented, historically-shifting part of Apple's API (removal
-   especially). They are coded to the best-known shapes but were **not** exercised
-   against a real logged-in account here (catalog was — see the live results in
-   the README). Confirm each against a real account before removing the marker.
+
+The **library write shapes** (`add_to_library` / `remove_from_library` /
+`create_playlist` / `add_to_playlist`) were **verified live 2026-07-21** against a
+real subscribed account — the full add → read-back → remove cycle plus
+create/add/delete-playlist all succeed. Two facts that cost real probing and are
+easy to regress:
+
+- **Library writes are ASYNC.** `add_to_library` returns 202 and the song only
+  appears in `/me/library/songs` a few seconds later — don't treat an
+  immediately-empty read-back as failure.
+- **Removal must hit `amp-api.music.apple.com` (`_AMP_BASE`), not the public
+  host.** `DELETE /me/library/songs/{id}` 401s (empty body) on
+  `api.music.apple.com` but 204s on amp-api with the identical token —
+  `remove_from_library` routes there and only there. (The same amp-api quirk
+  applies to deleting a library playlist, if that command is ever added.)
 
 ## Agent-driven login — you CAN do this one (unlike spotify-cli)
 

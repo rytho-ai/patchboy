@@ -46,9 +46,12 @@ Auth uses a developer token **scraped** from the `music.apple.com` web player an
 your browser's `media-user-token` cookie — the `splice-cli` lineage, no paid
 membership. It depends on `music.apple.com`'s current shape and Apple's ToS: fine
 for personal use, but expect the occasional re-scrape/re-login when Apple changes
-things, and treat first-time library **writes** as experiments (they're marked
-`verify-live`). The official, stable, ToS-compliant route ($99/yr membership
-signing a JWT + MusicKit JS) is deliberately **not** built here.
+things. Catalog and the full library read/write cycle are **verified live**
+(2026-07-21) against a real subscribed account; two quirks worth knowing: library
+**writes are async** (an added song appears a few seconds later), and library
+**removal** goes through Apple's internal `amp-api` host. The official, stable,
+ToS-compliant route ($99/yr membership signing a JWT + MusicKit JS) is
+deliberately **not** built here.
 
 ## What makes Apple different from spotify-cli
 

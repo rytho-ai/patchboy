@@ -143,6 +143,14 @@ def test_add_to_library_uses_bracketed_query_param(monkeypatch) -> None:
     assert sink["params"] == {"ids[songs]": "111,222"}
 
 
+def test_remove_from_library_routes_to_amp_api(monkeypatch) -> None:
+    sink: dict = {}
+    _patch(monkeypatch, _Resp(204, {}), sink)
+    Client(_session()).remove_from_library(("i.abc",))
+    assert sink["method"] == "DELETE"
+    assert sink["url"] == "https://amp-api.music.apple.com/v1/me/library/songs/i.abc"
+
+
 def test_playlist_add_sends_ref_body(monkeypatch) -> None:
     sink: dict = {}
     _patch(monkeypatch, _Resp(201, {}), sink)
