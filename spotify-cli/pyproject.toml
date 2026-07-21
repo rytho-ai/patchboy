@@ -17,6 +17,7 @@ dependencies = [
     "typer>=0.12",
     "rich>=13.7",
     "python-dotenv>=1.0",
+    "patchboy-core",
 ]
 
 [project.optional-dependencies]
@@ -30,3 +31,6 @@ packages = ["src/spotify_cli"]
 
 [tool.ruff]
 line-length = 100
+
+[tool.uv.sources]
+patchboy-core = { workspace = true }

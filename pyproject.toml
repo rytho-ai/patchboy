@@ -3,12 +3,14 @@
 # This is a VIRTUAL workspace root (no [project] of its own). Each member under
 # it is an independently-installable CLI with its own [project.scripts] — e.g.
 # `uv tool install ./spotify-cli` gives a bare `spotify` command. They share one
-# lockfile (this root) and, in a later phase, a shared `core` package for the
-# primitives currently copied across them (atomic session save, the exit-code
-# handler, rich render helpers, the OAuth loopback mechanics).
+# lockfile (this root) plus the `core` package (patchboy-core) for the ONE
+# primitive that turned out to be genuinely identical across members: atomic
+# 0600 file writes (see core/CLAUDE.md). The exit-code handler, rich render
+# helpers, and OAuth loopback mechanics are NOT shared — they differ enough
+# per service that unifying them would be a wrong abstraction.
 
 [tool.uv.workspace]
-members = ["spotify-cli", "applemusic-cli", "splice-cli", "youtube-cli"]
+members = ["core", "spotify-cli", "applemusic-cli", "splice-cli", "youtube-cli"]
 
 [tool.uv.sources]
 # Our own youtube-toolkit (not the unrelated same-named package on PyPI, which

@@ -17,6 +17,7 @@ dependencies = [
     "typer>=0.12",
     "rich>=13.7",
     "python-dotenv>=1.0",
+    "patchboy-core",
 ]
 
 [project.optional-dependencies]
@@ -33,6 +34,9 @@ packages = ["src/applemusic_cli"]
 
 [tool.ruff]
 line-length = 100
+
+[tool.uv.sources]
+patchboy-core = { workspace = true }
 
 [[tool.mypy.overrides]]
 module = "browser_cookie3"  # third-party, ships no type stubs

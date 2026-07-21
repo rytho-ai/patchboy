@@ -23,6 +23,7 @@ dependencies = [
     # Chromium-family cookie decryption (Chrome/Chromium/Brave/Edge). Firefox
     # needs no dependency, but bundling this keeps `--browser chrome` one-step.
     "browser-cookie3>=0.19",
+    "patchboy-core",
 ]
 
 [project.optional-dependencies]
@@ -43,6 +44,9 @@ artifacts = ["src/splice_cli/*.graphql"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.uv.sources]
+patchboy-core = { workspace = true }
 
 [tool.mypy]
 python_version = "3.10"

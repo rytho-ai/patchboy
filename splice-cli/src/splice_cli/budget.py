@@ -20,11 +20,12 @@ open checkbook.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 import json
+
+from patchboy_core.atomicio import atomic_write_text
 
 
 DEFAULT_PER_ITEM_CAP = 20  # credits; tune via `splice budget set --max-item`
@@ -115,12 +116,12 @@ def load(path: Path) -> Budget:
 
 
 def save(budget: Budget, path: Path) -> None:
-    """Write atomically (temp file + rename) — this is a money ledger; a
-    write that dies halfway must never leave a corrupt/partial file behind.
+    """Write atomically (temp file + rename) via patchboy_core's
+    atomic_write_text — this is a money ledger; a write that dies halfway
+    must never leave a corrupt/partial file behind.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(
+    atomic_write_text(
+        path,
         json.dumps(
             {
                 "allowance": budget.allowance,
@@ -130,7 +131,5 @@ def save(budget: Budget, path: Path) -> None:
                 "baseline_credits": budget.baseline_credits,
             },
             indent=1,
-        )
+        ),
     )
-    tmp.chmod(0o600)
-    os.replace(tmp, path)  # atomic on POSIX — no partial-file window

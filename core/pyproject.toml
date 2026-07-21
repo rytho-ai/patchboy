@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "patchboy-core"
+version = "0.1.0"
+description = "Shared primitives for the patchboy workspace — only mechanics genuinely identical across ≥2 members (right now: atomic 0600 file writes)."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = ["patchboy", "core", "shared"]
+authors = [{ name = "Bo-Yu Chen", email = "bernie40916@gmail.com" }]
+
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4", "mypy>=1.10"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/patchboy_core"]
+
+[tool.ruff]
+line-length = 100

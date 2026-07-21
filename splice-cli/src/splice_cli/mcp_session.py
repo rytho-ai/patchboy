@@ -7,20 +7,21 @@ agent, the CLI, and tests each point at their own file for each.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
+
+from patchboy_core.atomicio import atomic_write_text
 
 from .mcp_auth import McpSession
 
 
 def save(session: McpSession, path: Path) -> None:
-    """Write atomically (temp file + rename), same pattern as budget.py's
-    save() — write-then-chmod left a world-readable window (and a corrupt
-    file on a mid-write crash); OAuth tokens can't tolerate either.
+    """Write atomically (temp file + rename) via patchboy_core's
+    atomic_write_text, same pattern as budget.py's save() — write-then-chmod
+    left a world-readable window (and a corrupt file on a mid-write crash);
+    OAuth tokens can't tolerate either.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(
+    atomic_write_text(
+        path,
         json.dumps(
             {
                 "client_id": session.client_id,
@@ -28,10 +29,8 @@ def save(session: McpSession, path: Path) -> None:
                 "refresh_token": session.refresh_token,
                 "access_expiry": session.access_expiry,
             }
-        )
+        ),
     )
-    tmp.chmod(0o600)  # OAuth tokens — keep it user-only, set before the rename
-    os.replace(tmp, path)  # atomic on POSIX — no partial-file/world-readable window
 
 
 def load(path: Path) -> McpSession:
