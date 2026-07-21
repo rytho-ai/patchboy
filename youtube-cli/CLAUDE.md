@@ -1,5 +1,10 @@
 # CLAUDE.md — Development principles for youtube-cli
 
+> Part of the **patchboy** workspace (`packages/patchboy/`) — see its README +
+> `docs/adr/0001-patchboy-workspace.md` for the monorepo shape. youtube-cli
+> doesn't use patchboy-core yet; its thin-shell-over-youtube-toolkit shape
+> below is unchanged by the workspace move.
+
 Governance for Claude (or any AI assistant) working on this codebase. Same
 discipline as sibling `youtube-toolkit`, but this repo is the opposite kind
 of thing: a **thin shell**, not a library. The single most important rule is

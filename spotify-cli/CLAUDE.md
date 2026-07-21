@@ -1,5 +1,11 @@
 # CLAUDE.md — Development principles for spotify-cli
 
+> Part of the **patchboy** workspace (`packages/patchboy/`) — see its README +
+> `docs/adr/0001-patchboy-workspace.md` for the monorepo shape. The atomic
+> 0600 secret-file write lives in shared **patchboy-core**; this package's own
+> auth/wire/render/exit-code logic stays here (core holds only byte-for-byte
+> identical cross-member primitives).
+
 Governance for Claude (or any AI assistant) working on this codebase. Same
 discipline as siblings `youtube-cli` (thin shell) and `splice-cli` (caged
 auth). This repo is a **thin shell over the official Spotify Web API**: the

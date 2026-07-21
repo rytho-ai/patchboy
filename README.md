@@ -47,18 +47,24 @@ cd spotify-cli && uv run pytest    # each member keeps its own tests
 ```
 patchboy/
 ├── pyproject.toml     # virtual workspace root (members + shared git sources)
+├── core/              # patchboy-core: cross-member primitives (see below)
 ├── spotify-cli/       # each member: own pyproject, [project.scripts], src, tests,
-├── applemusic-cli/   #   CLAUDE.md, README, .claude/skills/ — the caged wire
+├── applemusic-cli/    #   CLAUDE.md, README, .claude/skills/ — the caged wire
 ├── splice-cli/        #   knowledge (each service's client.py) stays per-member.
 └── youtube-cli/
 ```
 
 Each member's `client.py` (the caged, service-specific API shape) is deliberately
-**not** shared — that's correct information-hiding. What the members duplicate
-today (atomic 0600 session save, the exit-code handler, rich render helpers, the
-OAuth loopback mechanics) is slated to move into a shared `core` package in a
-later phase — the reason a workspace exists at all.
+**not** shared — that's correct information-hiding. What the members genuinely
+duplicate — currently the atomic 0600 secret-file write — lives in the shared
+**`patchboy-core`** package (`core/`); members import it and keep their own
+payloads/dataclasses. Only byte-for-byte-identical cross-member primitives go in
+core; the auth flows, render tables, and exit-code handlers stay per-member
+(unifying those would be a wrong abstraction). Sharing that primitive without a
+publish-and-bump dance is the reason a workspace exists at all — see
+`docs/adr/0001-patchboy-workspace.md`.
 
-> History note: the members were separate git repos before this workspace; their
-> full per-commit history lives in those original checkouts. patchboy starts its
-> own history here.
+> History note: the four members were separate git repos before this workspace.
+> Their full per-commit history (with original hashes) was grafted in via
+> `git subtree`; the standalone repos have since been removed — patchboy is now
+> the single home.
