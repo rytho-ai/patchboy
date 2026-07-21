@@ -1,26 +1,63 @@
 """youtube — thin CLI shell over youtube-toolkit, meant for a coding agent to drive.
 
 Every command is a few lines: parse args, call youtube_toolkit, render. No
-extraction/fallback logic lives here — that's youtube-toolkit's job. Unlike
-splice-cli, there's no login/session/budget layer: everything here is public,
-unauthenticated access (search's Data API path needs a key, not a login).
+extraction/fallback logic lives here — that's youtube-toolkit's job.
+
+Two access tiers:
+  - PUBLIC (search/info/transcript/analyze/download/channel/playlist/…): no
+    login; a few need a Data API key (YOUTUBE_API_KEY), not a login.
+  - YOUR OWN account (login/my-channel/my-playlists/subscriptions): OAuth. This
+    is the ONE place this CLI has a login + a human-step (exit 2) handoff — an
+    API key identifies the app, not you, so it structurally can't read "mine".
 """
 
 from __future__ import annotations
 
 from contextlib import contextmanager
 from pathlib import Path
+from typing import NoReturn
 
 import typer
 from rich.console import Console
 from rich.markup import escape
+from rich.panel import Panel
 from youtube_toolkit import RateLimitedError, YouTubeToolkit
+
+# Typed errors that mean "a human step is required" (exit 2), not an ordinary
+# failure. Deep imports: youtube-toolkit doesn't re-export these at top level.
+from youtube_toolkit.handlers.youtube_api_handler import YouTubeAuthRequiredError
+from youtube_toolkit.oauth import YouTubeOAuthError
 
 from . import render
 from .config import Settings
 
 app = typer.Typer(add_completion=False, help="Thin CLI over youtube-toolkit.")
 console = Console()
+
+# The one-time Google Cloud setup a user does to enable OAuth login. Shown by
+# `youtube setup` (on demand) and by `youtube login` when no client is
+# configured. Model: each user registers their OWN Desktop-app OAuth client
+# (kept in "Testing" mode with themselves as a test user → no Google review;
+# the trade-off is a re-login roughly weekly). This is the same one-time
+# shape as spotify-cli's SPOTIFY_CLIENT_ID registration.
+_SETUP_STEPS = (
+    "To read your OWN channel/playlists/subscriptions, YouTube requires an "
+    "OAuth login — and that needs a one-time client registration (you do this "
+    "once, ever). Same idea as the Spotify app you registered once for spotify-cli.\n\n"
+    "1. Open [link]https://console.cloud.google.com/[/] and create (or pick) a project.\n"
+    "2. [bold]Enable the API[/]: APIs & Services → Library → search "
+    "\"YouTube Data API v3\" → Enable.\n"
+    "3. [bold]OAuth consent screen[/]: APIs & Services → OAuth consent screen → "
+    "User type [bold]External[/] → fill app name + your email → on 'Test users' "
+    "[bold]add your own Google account[/] (this keeps it in Testing mode — no "
+    "Google review needed; tokens just need a re-login ~weekly).\n"
+    "4. [bold]Create the client[/]: APIs & Services → Credentials → Create "
+    "Credentials → OAuth client ID → Application type [bold]Desktop app[/] → "
+    "Create → [bold]Download JSON[/].\n"
+    "5. Point the CLI at it: set [bold]YOUTUBE_OAUTH_CLIENT_SECRETS[/]=/path/to/"
+    "that.json (in your .env or environment).\n"
+    "6. Run [bold]youtube login[/] again — a browser opens, approve, done."
+)
 
 # User-facing --sort values -> what the no-API (scrapetube) search path
 # actually expects. --api ignores sort_by entirely (see search() below).
@@ -52,6 +89,23 @@ def _handle():
         yield
     except typer.Exit:
         raise
+    except YouTubeAuthRequiredError:
+        # A `mine.*` call with no OAuth session — the ONE human-step handoff
+        # (exit 2). Relayed as its own panel so an agent keys off it and stops.
+        _needs_login()
+    except YouTubeOAuthError as exc:
+        # OAuth is configured-but-broken (token revoked, or a bad/missing
+        # secrets file at login). Also a human step, but the fix is re-login /
+        # check setup, not the full first-time walkthrough.
+        console.print(
+            Panel(
+                f"{escape(str(exc))}\n\nRun [bold]youtube login[/] again. If you "
+                "haven't registered an OAuth client yet, run [bold]youtube setup[/].",
+                title="[red]Login needed[/]",
+                border_style="red",
+            )
+        )
+        raise typer.Exit(2)
     except RateLimitedError:
         console.print(
             "[red]YouTube is rate-limiting requests from this IP — "
@@ -66,6 +120,93 @@ def _handle():
         # be parsed as Rich markup.
         console.print(f"[red]{escape(str(exc))}[/]")
         raise typer.Exit(1)
+
+
+def _needs_login() -> NoReturn:
+    """Exit-2 handoff for a `mine.*` command run without an OAuth session."""
+    console.print(
+        Panel(
+            "This reads your OWN YouTube account, which needs an OAuth login.\n\n"
+            "Run [bold]youtube login[/] (opens a browser, approve once). If you "
+            "haven't set up an OAuth client yet, run [bold]youtube setup[/] first.",
+            title="[red]Login needed[/]",
+            border_style="red",
+        )
+    )
+    raise typer.Exit(2)
+
+
+# ---- your own account (OAuth) ----------------------------------------------
+
+
+@app.command()
+def setup() -> None:
+    """Show the one-time Google Cloud steps to enable `youtube login` (OAuth)."""
+    console.print(Panel(_SETUP_STEPS, title="Enable YouTube login (one-time setup)", border_style="cyan"))
+
+
+@app.command()
+def login(env_file: Path = typer.Option(None, "--env")) -> None:
+    """Authorize your own YouTube account (OAuth) so `my-*` commands work.
+
+    Opens a browser for you to approve, then saves a token locally. Needs a
+    one-time OAuth client first — run `youtube setup` if you haven't. The
+    browser must be on THIS machine (the redirect is a localhost callback).
+    """
+    settings = Settings.load(env_file)
+    if not settings.oauth_client_secrets:
+        console.print(
+            Panel(_SETUP_STEPS, title="[yellow]Setup needed before login[/]", border_style="yellow")
+        )
+        raise typer.Exit(2)
+
+    with _handle():
+        token_path = _toolkit().mine.login()
+    console.print(f"[green]✓ Logged in.[/] Token saved to {escape(str(token_path))}")
+
+
+@app.command()
+def status(env_file: Path = typer.Option(None, "--env")) -> None:
+    """Show whether you're logged in (OAuth) and where the token lives."""
+    settings = Settings.load(env_file)
+    with _handle():
+        state = _toolkit().mine.status()
+    if state.get("logged_in"):
+        console.print(f"[green]✓ Logged in.[/] Token: {escape(str(state.get('token_path', '')))}")
+        return
+    configured = "yes" if settings.oauth_client_secrets else "no — run `youtube setup`"
+    console.print(
+        f"[yellow]Not logged in.[/] OAuth client configured: {configured}. "
+        "Run `youtube login`."
+    )
+    raise typer.Exit(1)
+
+
+@app.command(name="my-channel")
+def my_channel() -> None:
+    """Your own channel's info (needs `youtube login`)."""
+    with _handle():
+        info = _toolkit().mine.channel()
+    console.print(render.my_channel_panel(info))
+
+
+@app.command(name="my-playlists")
+def my_playlists(limit: int = typer.Option(25, "--limit", "-n", help="Max playlists (page cap 50).")) -> None:
+    """Your own playlists (needs `youtube login`)."""
+    with _handle():
+        result = _toolkit().mine.playlists(max_results=limit)
+    console.print(render.my_playlists_table(result))
+
+
+@app.command()
+def subscriptions(
+    limit: int = typer.Option(25, "--limit", "-n", help="Max channels (page cap 50)."),
+    order: str = typer.Option("alphabetical", "--order", help="alphabetical|relevance|unread."),
+) -> None:
+    """The channels you're subscribed to (needs `youtube login`)."""
+    with _handle():
+        result = _toolkit().mine.subscriptions(max_results=limit, order=order)
+    console.print(render.subscriptions_table(result))
 
 
 @app.command()

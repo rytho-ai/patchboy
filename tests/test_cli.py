@@ -18,6 +18,8 @@ from unittest.mock import MagicMock
 
 from typer.testing import CliRunner
 from youtube_toolkit import Comment, CommentAuthor, CommentMetrics, CommentResult, RateLimitedError
+from youtube_toolkit.handlers.youtube_api_handler import YouTubeAuthRequiredError
+from youtube_toolkit.oauth import YouTubeOAuthError
 
 from youtube_cli import cli
 from youtube_cli.config import Settings
@@ -671,3 +673,144 @@ def test_comments_search_flag_reaches_sub_api(monkeypatch):
     # Untrusted comment text with brackets must survive markup escaping.
     assert "Great [video]!" in result.output
     toolkit.get.comments.assert_not_called()
+
+
+# --- OAuth / "my own account" commands (login + my-channel/playlists/subs) ---
+
+
+def _patch_settings_oauth(monkeypatch, client_secrets: str | None = None) -> None:
+    def _load(env_file=None) -> Settings:
+        return Settings(
+            api_key=None,
+            download_dir=Path("/tmp/youtube-cli-test"),
+            oauth_client_secrets=client_secrets,
+        )
+
+    monkeypatch.setattr(cli.Settings, "load", staticmethod(_load))
+
+
+def test_setup_prints_walkthrough_exit_0(monkeypatch):
+    result = runner.invoke(cli.app, ["setup"])
+    assert result.exit_code == 0, result.output
+    assert "YOUTUBE_OAUTH_CLIENT_SECRETS" in result.output
+    assert "Desktop app" in result.output
+
+
+def test_login_without_client_secrets_exits_2_with_walkthrough(monkeypatch):
+    _patch_settings_oauth(monkeypatch, client_secrets=None)
+    # Must NOT even build a toolkit — the pre-flight catches it.
+    monkeypatch.setattr(cli, "_toolkit", lambda: (_ for _ in ()).throw(AssertionError("must not call toolkit")))
+
+    result = runner.invoke(cli.app, ["login"])
+    assert result.exit_code == 2, result.output
+    assert "YouTube Data API v3" in result.output  # the setup steps
+
+
+def test_login_success_saves_and_reports_token(monkeypatch):
+    _patch_settings_oauth(monkeypatch, client_secrets="/path/to/secrets.json")
+    toolkit = _patch_toolkit(monkeypatch)
+    toolkit.mine.login.return_value = "/home/u/.youtube-cli/token.json"
+
+    result = runner.invoke(cli.app, ["login"])
+    assert result.exit_code == 0, result.output
+    assert "Logged in" in result.output
+    assert "token.json" in result.output
+    toolkit.mine.login.assert_called_once()
+
+
+def test_login_oauth_error_exits_2(monkeypatch):
+    _patch_settings_oauth(monkeypatch, client_secrets="/path/to/secrets.json")
+    toolkit = _patch_toolkit(monkeypatch)
+    toolkit.mine.login.side_effect = YouTubeOAuthError("token refresh failed")
+
+    result = runner.invoke(cli.app, ["login"])
+    assert result.exit_code == 2, result.output
+    assert "youtube login" in result.output
+
+
+def test_status_logged_in_exit_0(monkeypatch):
+    _patch_settings_oauth(monkeypatch)
+    toolkit = _patch_toolkit(monkeypatch)
+    toolkit.mine.status.return_value = {"logged_in": True, "token_path": "/home/u/.youtube-cli/token.json"}
+
+    result = runner.invoke(cli.app, ["status"])
+    assert result.exit_code == 0, result.output
+    assert "Logged in" in result.output
+
+
+def test_status_not_logged_in_exit_1(monkeypatch):
+    _patch_settings_oauth(monkeypatch, client_secrets=None)
+    toolkit = _patch_toolkit(monkeypatch)
+    toolkit.mine.status.return_value = {"logged_in": False, "token_path": "/home/u/.youtube-cli/token.json"}
+
+    result = runner.invoke(cli.app, ["status"])
+    assert result.exit_code == 1, result.output
+    assert "Not logged in" in result.output
+    assert "youtube setup" in result.output  # nudges to setup since no client configured
+
+
+def test_my_channel_not_logged_in_exits_2(monkeypatch):
+    toolkit = _patch_toolkit(monkeypatch)
+    toolkit.mine.channel.side_effect = YouTubeAuthRequiredError("needs oauth")
+
+    result = runner.invoke(cli.app, ["my-channel"])
+    assert result.exit_code == 2, result.output
+    assert "Login needed" in result.output
+    assert "youtube login" in result.output
+
+
+def test_my_channel_renders_when_logged_in(monkeypatch):
+    toolkit = _patch_toolkit(monkeypatch)
+    toolkit.mine.channel.return_value = {
+        "title": "My Cool Channel",
+        "channel_id": "UC123",
+        "subscriber_count": 4200,
+        "video_count": 87,
+        "view_count": 1000000,
+    }
+
+    result = runner.invoke(cli.app, ["my-channel"])
+    assert result.exit_code == 0, result.output
+    assert "My Cool Channel" in result.output
+    assert "UC123" in result.output
+
+
+def test_my_playlists_renders(monkeypatch):
+    toolkit = _patch_toolkit(monkeypatch)
+    toolkit.mine.playlists.return_value = {
+        "playlists": [{"id": "PL1", "title": "Beats", "item_count": 12, "privacy_status": "private"}]
+    }
+
+    result = runner.invoke(cli.app, ["my-playlists"])
+    assert result.exit_code == 0, result.output
+    assert "Beats" in result.output
+    toolkit.mine.playlists.assert_called_once_with(max_results=25)
+
+
+def test_my_playlists_not_logged_in_exits_2(monkeypatch):
+    toolkit = _patch_toolkit(monkeypatch)
+    toolkit.mine.playlists.side_effect = YouTubeAuthRequiredError("needs oauth")
+
+    result = runner.invoke(cli.app, ["my-playlists"])
+    assert result.exit_code == 2, result.output
+
+
+def test_subscriptions_renders_and_passes_order(monkeypatch):
+    toolkit = _patch_toolkit(monkeypatch)
+    toolkit.mine.subscriptions.return_value = {
+        "subscriptions": [{"channel_title": "Fireship", "channel_id": "UCx", "subscribed_at": "2021-01-01T00:00:00Z"}]
+    }
+
+    result = runner.invoke(cli.app, ["subscriptions", "--order", "relevance", "--limit", "10"])
+    assert result.exit_code == 0, result.output
+    assert "Fireship" in result.output
+    toolkit.mine.subscriptions.assert_called_once_with(max_results=10, order="relevance")
+
+
+def test_subscriptions_not_logged_in_exits_2(monkeypatch):
+    toolkit = _patch_toolkit(monkeypatch)
+    toolkit.mine.subscriptions.side_effect = YouTubeAuthRequiredError("needs oauth")
+
+    result = runner.invoke(cli.app, ["subscriptions"])
+    assert result.exit_code == 2, result.output
+    assert "Login needed" in result.output

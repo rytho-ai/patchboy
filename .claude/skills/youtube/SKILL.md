@@ -1,6 +1,6 @@
 ---
 name: youtube
-description: Search, get info, transcript, analyze, download, and read comments from YouTube via the unofficial youtube-cli (wraps youtube-toolkit). Use when the user asks to find YouTube videos, get a video's metadata/transcript/comments, or download audio/video. No login required for most operations.
+description: Search, get info, transcript, analyze, download, and read comments from YouTube via the unofficial youtube-cli (wraps youtube-toolkit). Also reads the user's OWN channel/playlists/subscriptions via an OAuth login. Use when the user asks to find YouTube videos, get a video's metadata/transcript/comments, download audio/video, or look at their own YouTube account. Most operations need no login; the "my own account" ones need `youtube login`.
 ---
 
 # YouTube toolkit — operating manual
@@ -10,13 +10,39 @@ mature library: 5 sub-APIs, layered services/handlers, multi-backend
 fallback). This skill is the decision manual; full command reference and
 architecture: `packages/youtube-cli/README.md`.
 
-## No login, no budget — much simpler than the Splice skill
+## Three access tiers — most need no login; "my own account" does
 
-Unlike `/splice`, there is **no session-lifting, no login bridge, no
-purchase/budget system.** Every command here is public, unauthenticated
-access. The only credential involved is an optional Data API key
-(`YOUTUBE_API_KEY`, from Google Cloud Console) — a config value, not a login.
-Nothing here spends money or requires the user to pass any human-only gate.
+Unlike `/splice` there is no purchase/budget system, and **most** commands are
+public unauthenticated access. Three tiers:
+
+1. **Zero setup** — search (default), info, transcript, analyze, download,
+   channel, playlist, captions, formats, sponsorblock.
+2. **Data API key** (`YOUTUBE_API_KEY`, a config value not a login) — only
+   `search --api` and `comments`.
+3. **OAuth login** (`youtube login`) — reading the user's OWN account:
+   `my-channel`, `my-playlists`, `subscriptions`. This is the one login this
+   CLI has. See the handoff rules below.
+
+## `my-*` commands and the login handoff (the one human-step here)
+
+An API key says which *app* is asking, never *who the user is* — so
+`my-channel`/`my-playlists`/`subscriptions` structurally need OAuth. Rules:
+
+- A `my-*` command with no session **exits 2** with a "run `youtube login`"
+  panel. Relay it and stop — don't try to route around it.
+- **You cannot do the login yourself.** `youtube login` opens a browser for
+  the user to approve with their own Google account (a loopback OAuth flow) —
+  same "agent can't click" wall as `/spotify`. Tell the user to run
+  `youtube login`.
+- **First-time users need a one-time OAuth client registration.** If `login`
+  says "setup needed" (or the user has never set `YOUTUBE_OAUTH_CLIENT_SECRETS`),
+  run `youtube setup` — it prints exact click-by-click Google Cloud Console
+  steps (enable the API → consent screen in Testing with themselves as a test
+  user → create a Desktop-app OAuth client → download the JSON → set the env
+  var). Relay those; you can't do the registration for them (it needs their
+  Google account). It's the same one-time app-registration `/spotify` needs.
+- Once logged in, the user can drop `YOUTUBE_API_KEY` — OAuth is a superset,
+  so `search --api`/`comments` work through it too.
 
 ## The one thing worth knowing: two commands need an API key, the rest don't
 
@@ -49,6 +75,14 @@ youtube playlist <url> [--videos [-n N]] [--download [--type audio|video] [--for
 youtube captions <url> [--lang en] [--format srt|vtt|txt|json] [--dest/-o PATH]
 youtube formats <url>               # available resolutions/codecs, pre-download planning
 youtube sponsorblock <url>          # preview sponsor/intro/outro segments, no download
+
+# your own account (OAuth) — see the login-handoff section above
+youtube setup                       # one-time Google Cloud steps (relay to user)
+youtube login                       # user approves in a browser (you can't click it)
+youtube status                      # logged in? token path?
+youtube my-channel                  # the user's own channel stats
+youtube my-playlists [-n N]
+youtube subscriptions [-n N] [--order alphabetical|relevance|unread]
 ```
 
 `--env FILE` points at a specific `.env` instead of the default lookup.
@@ -90,4 +124,4 @@ not resolve this specific failure mode.
 This automates public YouTube access at conversational/personal-use rates.
 Don't batch-scrape (e.g., looping `download` over hundreds of videos in one
 session) — that crosses into the same ToS-risk territory splice-cli's
-automation does, even though no money or login is involved here.
+automation does, even though no money is involved.

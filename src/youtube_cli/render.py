@@ -306,3 +306,64 @@ def search_filtered_table(query: str, result: dict[str, Any]) -> Table:
             _s(r.get("video_id", "")),
         )
     return table
+
+
+# ---- the authenticated user's own data (toolkit.mine.*) --------------------
+
+
+def my_channel_panel(info: dict[str, Any]) -> Table:
+    """Render toolkit.mine.channel()'s dict (the Data API get_my_channel shape,
+    which differs from get.channel()'s pytubefix shape — different keys)."""
+    table = Table(title=_s(info.get("title", "")), show_header=False)
+    table.add_column("field", style="dim")
+    table.add_column("value")
+    rows = [
+        ("channel_id", _s(info.get("channel_id", ""))),
+        ("handle/url", _s(info.get("custom_url", ""))),
+        ("subscribers", _fmt_count(info.get("subscriber_count"))),
+        ("videos", _fmt_count(info.get("video_count"))),
+        ("total views", _fmt_count(info.get("view_count"))),
+        ("created", _s(str(info.get("published_at", ""))[:10])),
+        ("country", _s(info.get("country", ""))),
+    ]
+    description = info.get("description")
+    if description:
+        rows.append(("description", _s(str(description)[:300])))
+    for field, value in rows:
+        if value:
+            table.add_row(field, value)
+    return table
+
+
+def my_playlists_table(result: dict[str, Any]) -> Table:
+    """Render toolkit.mine.playlists()'s {'playlists': [...]} dict."""
+    playlists = result.get("playlists", [])
+    table = Table(title=f"My playlists ({len(playlists)} shown)")
+    table.add_column("Title", max_width=44, overflow="fold")
+    table.add_column("Items", justify="right")
+    table.add_column("Privacy")
+    table.add_column("id", style="dim")
+    for p in playlists:
+        table.add_row(
+            _s(p.get("title", "")),
+            _fmt_count(p.get("item_count")),
+            _s(p.get("privacy_status", "")),
+            _s(p.get("id", "")),
+        )
+    return table
+
+
+def subscriptions_table(result: dict[str, Any]) -> Table:
+    """Render toolkit.mine.subscriptions()'s {'subscriptions': [...]} dict."""
+    subs = result.get("subscriptions", [])
+    table = Table(title=f"My subscriptions ({len(subs)} shown)")
+    table.add_column("Channel", max_width=40, overflow="fold")
+    table.add_column("Subscribed")
+    table.add_column("channel_id", style="dim")
+    for s in subs:
+        table.add_row(
+            _s(s.get("channel_title", "")),
+            _s(str(s.get("subscribed_at", ""))[:10]),
+            _s(s.get("channel_id", "")),
+        )
+    return table

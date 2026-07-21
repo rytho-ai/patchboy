@@ -29,6 +29,7 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "ruff>=0.4",
+    "mypy>=1.10",
 ]
 
 [project.scripts]
@@ -50,3 +51,10 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[[tool.mypy.overrides]]
+# our own dep, ships no py.typed marker yet — cover submodules too
+# (cli.py deep-imports youtube_toolkit.oauth / .handlers.youtube_api_handler
+# for the typed OAuth errors)
+module = ["youtube_toolkit", "youtube_toolkit.*"]
+ignore_missing_imports = true

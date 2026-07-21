@@ -60,8 +60,29 @@ every backend fails (there are no typed exceptions upstream today). So:
 - **Minimum bar:** every command wraps its toolkit call so a failure becomes
   a clean message + `raise typer.Exit(1)`, never a raw traceback.
 - **Exit-code convention:** `0` ok · `1` ordinary failure (no results, video
-  unavailable, backend error, missing API key with no fallback) · reserve `2`
-  for a genuine human-action-required handoff (rare here — there's no login).
+  unavailable, backend error, missing API key with no fallback) · `2` a human
+  step is required. Exit 2 exists now because of OAuth (the `mine.*`
+  commands): a `my-*` call with no session, or `login` with no OAuth client
+  configured, prints a panel and exits 2 — relay it verbatim and STOP. The
+  two typed errors this routes on live in the toolkit:
+  `youtube_toolkit.handlers.youtube_api_handler.YouTubeAuthRequiredError`
+  (not logged in) and `youtube_toolkit.oauth.YouTubeOAuthError` (client
+  misconfigured / token revoked); `cli._handle()` maps both to exit 2.
+
+### OAuth login — the one login this CLI has, and driving it as an agent
+
+`youtube login` (and its one-time `youtube setup`) are the only stateful part
+of this CLI. Two things an AI assistant driving this must know:
+
+- **You cannot do the browser click.** `login` runs Google's loopback OAuth
+  flow (`InstalledAppFlow.run_local_server`), which opens a browser for the
+  *user* to approve with *their* Google account — same "agent can't click"
+  wall as spotify-cli. Hand off: tell the user to run `youtube login`, or if
+  they hit "setup needed", walk them through `youtube setup`'s steps.
+- **The client registration is the user's one-time job.** `YOUTUBE_OAUTH_CLIENT_SECRETS`
+  points at a Desktop-app `client_secrets.json` the user registers once in
+  Google Cloud Console (model A: each user their own). The CLI can't create
+  it. When it's missing, `login`/`setup` print the exact steps — relay them.
 - **Known failure to surface, not swallow:** `transcript` can hit YouTube's
   IP rate-limiting ("blocking requests from your IP"). Tell the user
   directly; retrying immediately won't help. Presenting it cleanly is a CLI

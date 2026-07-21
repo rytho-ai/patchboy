@@ -2,14 +2,22 @@
 
 A thin CLI + Claude Code skill over `youtube-toolkit` — search, info,
 transcript, analyze, download, comments, channel, playlist, captions,
-formats, sponsorblock. Unlike `splice-cli`, there's no login/session/budget
-layer here: nothing needs a logged-in session. Every command except
-`comments` (and `search --api`) works with zero setup — no API key needed.
-Two things need a Data API key from Google Cloud Console
-(`YOUTUBE_API_KEY`), not a login: `search --api` (a bare keyword search
-against the Data API — not filtered or trending; `--sort` doesn't apply to
-it, see below) and `comments` (youtube-toolkit has no no-API fallback for
-comments, verified — it always calls the Data API).
+formats, sponsorblock, plus reading **your own** channel/playlists/subscriptions.
+
+Three access tiers:
+
+- **Zero setup** (most commands): search's default path, info, transcript,
+  analyze, download, channel, playlist, captions, formats, sponsorblock — no
+  key, no login.
+- **Data API key** (`YOUTUBE_API_KEY`, not a login): `search --api` (a bare
+  keyword search against the Data API — not filtered or trending; `--sort`
+  doesn't apply, see below) and `comments` (youtube-toolkit has no no-API
+  fallback for comments — it always calls the Data API).
+- **OAuth login** (`youtube login`): reading **your own** account —
+  `my-channel`, `my-playlists`, `subscriptions`. An API key identifies the
+  *app*, not *you*, so it structurally can't read "mine". This is the one
+  place the CLI has a login and a human-step (exit 2) handoff. See
+  **[Reading your own account](#reading-your-own-account-oauth)** below.
 
 ## Why this exists
 
@@ -48,6 +56,45 @@ uv pip install -e ".[dev]"
 uv run youtube --help
 ```
 
+## Reading your own account (OAuth)
+
+`my-channel` / `my-playlists` / `subscriptions` read data that belongs to
+*you*, which an API key can't — the API key says which *app* is asking, never
+*who you are*. That needs an OAuth login. It's a two-part, one-time setup:
+
+**1. Register an OAuth client (once, ever).** Run `youtube setup` for the
+exact click-by-click steps. In short: in Google Cloud Console, enable
+"YouTube Data API v3", configure the OAuth consent screen as **External /
+Testing** with **your own account added as a test user**, create an OAuth
+client ID of type **Desktop app**, and download its `client_secrets.json`.
+Point the CLI at it: `YOUTUBE_OAUTH_CLIENT_SECRETS=/path/to/that.json` (in
+`.env` or the environment). This is the same one-time app registration
+spotify-cli's `SPOTIFY_CLIENT_ID` needs — you do it once and never again.
+
+**2. Log in.**
+
+```bash
+youtube login       # opens a browser; approve once. Token saved 0600 at ~/.youtube-cli/token.json
+youtube status      # confirm
+youtube my-channel
+```
+
+Notes:
+- **Read-only.** The requested scope is `youtube.readonly` — this CLI never
+  posts, uploads, edits, or deletes on your behalf.
+- **Testing-mode tokens expire ~weekly.** Keeping the consent screen in
+  "Testing" avoids Google's app-verification review; the trade-off is that
+  you'll re-run `youtube login` roughly once a week. (Going through
+  verification removes that, but it's a real review process — not worth it for
+  a personal tool.)
+- **The login browser must be on the same machine as the CLI** (the redirect
+  is a `localhost` callback). For a headless/remote box, log in locally and
+  copy `~/.youtube-cli/token.json` over.
+- **Once logged in you can drop `YOUTUBE_API_KEY` entirely** — OAuth is a
+  superset, so `search --api` and `comments` work through it too.
+- A `my-*` command with no login exits **2** with a "run `youtube login`"
+  panel (the one human-step handoff); an agent relays that and stops.
+
 ## Commands
 
 ```bash
@@ -67,6 +114,14 @@ youtube playlist <url> [--videos [-n N]] [--download [--type audio|video] [--for
 youtube captions <url> [--lang en] [--format srt|vtt|txt|json] [--dest/-o PATH]
 youtube formats <url>                 # available resolutions/codecs, pre-download planning
 youtube sponsorblock <url>            # preview sponsor/intro/outro segments, no download
+
+# your own account (OAuth — see "Reading your own account" below)
+youtube setup                         # print the one-time Google Cloud steps
+youtube login [--env FILE]            # authorize your account (opens a browser)
+youtube status [--env FILE]           # are you logged in? where's the token?
+youtube my-channel                    # your channel's stats
+youtube my-playlists [-n N]           # your playlists
+youtube subscriptions [-n N] [--order alphabetical|relevance|unread]
 ```
 
 `--env FILE` (on `search`, `download`, `comments`, `playlist`) points at a
