@@ -1,0 +1,18 @@
+# patchboy — a uv workspace: the panel where every external platform patches in.
+#
+# This is a VIRTUAL workspace root (no [project] of its own). Each member under
+# it is an independently-installable CLI with its own [project.scripts] — e.g.
+# `uv tool install ./spotify-cli` gives a bare `spotify` command. They share one
+# lockfile (this root) and, in a later phase, a shared `core` package for the
+# primitives currently copied across them (atomic session save, the exit-code
+# handler, rich render helpers, the OAuth loopback mechanics).
+
+[tool.uv.workspace]
+members = ["spotify-cli", "apple-music-cli", "splice-cli", "youtube-cli"]
+
+[tool.uv.sources]
+# Our own youtube-toolkit (not the unrelated same-named package on PyPI, which
+# only goes up to 0.2.0; this is our own) — tracks main on GitHub so youtube-cli
+# resolves it without needing a sibling checkout on disk. Declared at the
+# workspace root so it applies to every member that depends on it.
+youtube-toolkit = { git = "https://github.com/rytho-ai/youtube-toolkit.git" }

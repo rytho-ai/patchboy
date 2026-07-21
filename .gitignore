@@ -1,0 +1,24 @@
+# Secrets — never commit real tokens/keys.
+.env
+*.session.json
+
+# uv / Python
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# Downloaded media / samples (from youtube-cli / splice-cli usage)
+downloads/
+temp_downloads/
+*.mp3
+*.mp4
+*.wav
+*.m4a
+*.webm
+*.aiff
