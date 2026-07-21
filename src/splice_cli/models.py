@@ -34,6 +34,13 @@ class Sample(BaseModel):
     price_currency: str | None = None
     # Streamable preview audio (mp3), distinct from the licensed download.
     preview_url: str | None = None
+    # The splice.com page a human can open to listen before deciding whether
+    # to download/buy. Only populated for asset_type == "sample" (verified
+    # live 2026-07-21; other asset types' URL scheme is unconfirmed) and only
+    # when the source data lets us build it correctly — see client.py's
+    # `_sample_page_url` for why this needs care (Splice's `uuid` field means
+    # a different thing depending on which query populated it).
+    url: str | None = None
 
 
 class SearchResult(BaseModel):

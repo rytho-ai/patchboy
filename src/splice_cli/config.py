@@ -32,6 +32,11 @@ class Settings:
     # OAuth token set for the official Splice MCP (search/download/stacks
     # default backend) — independent of session_path's cookie-lifted session.
     mcp_session_path: Path
+    # Default for `download`/`buy`'s --confirm/--no-confirm: print the sample's
+    # splice.com page + (for buy) its price and ask before proceeding. Off by
+    # default — preserves the existing automatic, agent-driven behavior; a
+    # human who wants the listen-first gate opts in via env or the per-call flag.
+    confirm_before_download: bool
 
     @classmethod
     def load(cls, env_file: str | Path | None = None) -> "Settings":
@@ -53,4 +58,7 @@ class Settings:
             mcp_session_path=_expand(
                 os.environ.get("SPLICE_MCP_SESSION_PATH", "~/.splice-cli/mcp-session.json")
             ),
+            confirm_before_download=os.environ.get(
+                "SPLICE_CONFIRM_BEFORE_DOWNLOAD", ""
+            ).strip().lower() in ("1", "true", "yes"),
         )

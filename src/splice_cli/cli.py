@@ -11,10 +11,13 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, NoReturn, TypeVar
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -23,11 +26,20 @@ from . import mcp_auth
 from . import mcp_session as mcp_session_store
 from . import render
 from . import session as session_store
-from .auth import AuthError, NoSessionError, Session, SessionExpired, extract_session
+from .auth import (
+    CLEARANCE_COOKIE,
+    AuthError,
+    NoSessionError,
+    Session,
+    SessionExpired,
+    extract_session,
+    parse_pasted_session,
+)
 from .client import SampleNotFoundError, SpliceClient
 from .config import Settings
 from .mcp_auth import McpAuthError, McpSession
 from .mcp_client import McpClient, McpRateLimitError
+from .models import Sample, Stack
 
 app = typer.Typer(add_completion=False, help="Unofficial Splice automation CLI.")
 console = Console()
@@ -97,7 +109,7 @@ def _session(settings: Settings, *, browser: str = "auto", refresh: bool = False
     return sess
 
 
-def _mcp_needs_human(err: McpAuthError) -> None:
+def _mcp_needs_human(err: McpAuthError) -> NoReturn:
     """MCP's equivalent of _needs_human — a distinct instruction set since
     the fix is `splice login --mcp`, not the cookie-lifting `splice login`.
     """
@@ -112,7 +124,10 @@ def _mcp_needs_human(err: McpAuthError) -> None:
     raise typer.Exit(code=2)
 
 
-def _mcp_call(settings: Settings, fn):
+_T = TypeVar("_T")
+
+
+def _mcp_call(settings: Settings, fn: Callable[[McpClient], _T]) -> _T:
     """Load the MCP session, open a client, and run `fn(client)` — the
     shared shape of every MCP command branch (search/download/buy/stack *),
     translating exceptions into the clean handoffs/exit codes this CLI
@@ -189,6 +204,12 @@ def _print_expiry(sess: Session) -> None:
 @app.command()
 def login(
     browser: str = typer.Option("auto", "--browser", "-b", help="auto|firefox|chrome|chromium|brave|edge"),
+    paste: bool = typer.Option(
+        False, "--paste",
+        help="Don't read a local browser's cookie store; paste the cookies (and UA) "
+             "yourself. For a machine with no browser of its own, or a different one "
+             "than the CLI runs on. See the printed instructions.",
+    ),
     mcp: bool = typer.Option(
         False, "--mcp",
         help="Authorize the official Splice MCP (OAuth) instead of lifting a browser session.",
@@ -198,6 +219,12 @@ def login(
         help="(--mcp only) loopback port for the OAuth redirect — pick another "
              "if the default is already in use (e.g. another login in progress).",
     ),
+    manual: bool = typer.Option(
+        False, "--no-server/--server", "--manual",
+        help="(--mcp only) don't run a loopback server; paste the redirect URL "
+             "back yourself. For headless/remote machines, or a different "
+             "browser than this process — the URL can be opened on ANY machine.",
+    ),
     env_file: Path = typer.Option(None, "--env"),
 ) -> None:
     """Log in. Default: lift a cookie session from a browser (GraphQL path).
@@ -205,10 +232,29 @@ def login(
     --mcp: authorize the official Splice MCP server instead — a standard
     OAuth flow (dynamic client registration + PKCE), the default backend for
     search/download/stacks. Both logins are independent; run each once.
+
+    --mcp's default (loopback server) needs the authorizing browser on THIS
+    machine. --mcp --no-server instead prints the URL and waits for you to
+    paste the redirect back — works from any browser, on any machine (SSH,
+    headless, a remote box with no browser of its own).
+
+    The default cookie-lift ALSO needs the browser on THIS machine (it reads
+    the local cookie store directly) — --paste is that path's counterpart:
+    paste the cookies (+ UA) yourself instead. Unlike --mcp --no-server, this
+    doesn't get you a self-refreshing session — Splice's auth cookie is
+    short-lived (~1hr) either way, lifted or pasted; you'll paste fresh values
+    again when it expires. For a machine you'll use repeatedly, `--mcp` is the
+    lower-maintenance choice if MCP covers what you need.
     """
     settings = Settings.load(env_file)
     if mcp:
-        _login_mcp(settings, redirect_port=port)
+        if manual:
+            _login_mcp_manual(settings, redirect_port=port)
+        else:
+            _login_mcp(settings, redirect_port=port)
+        return
+    if paste:
+        _login_paste(settings)
         return
     try:
         sess = _session(settings, browser=browser, refresh=True)
@@ -221,39 +267,124 @@ def login(
     _print_expiry(sess)
 
 
+def _login_paste(settings: Settings) -> None:
+    """The GraphQL cookie session's manual counterpart to browser-lifting —
+    for a machine with no browser of its own, or a different one than the CLI
+    runs on. Prompts for the raw Cookie header + UA, builds a Session, and
+    live-validates it with a real search BEFORE saving — a bad paste should
+    fail loudly here, not silently clobber a working session file.
+    """
+    console.print(
+        Panel(
+            "1. In a browser, sign in to [bold]splice.com[/] (pass the Cloudflare "
+            "check by hand — this step needs a real human, same as always).\n"
+            "2. Open DevTools → [bold]Network[/] tab, reload the page, click any "
+            "request to splice.com, and find the [bold]Cookie[/] request header. "
+            "Copy its FULL value.\n"
+            "3. In that browser's console, run [bold]navigator.userAgent[/] and "
+            "copy the result — Cloudflare's clearance cookie is bound to this "
+            "exact string; a mismatch gets you re-challenged.\n\n"
+            "Paste each below.",
+            title="Splice login (manual / paste)",
+        )
+    )
+    cookie_header = typer.prompt("Paste the Cookie header value")
+    user_agent = typer.prompt("Paste the User-Agent value")
+
+    try:
+        sess = parse_pasted_session(cookie_header, user_agent)
+    except NoSessionError as err:
+        console.print(f"[red]{err}[/]")
+        raise typer.Exit(1)
+    if CLEARANCE_COOKIE not in sess.cookies:
+        console.print(
+            f"[yellow]No `{CLEARANCE_COOKIE}` cookie in what you pasted — "
+            "the next request may hit a fresh Cloudflare challenge.[/]"
+        )
+
+    try:
+        with SpliceClient(sess) as client:
+            client.search("drums", limit=1)
+    except AuthError as err:
+        console.print(f"[red]Pasted cookies were rejected: {err}[/]\n[dim]Grab fresh values and try again.[/]")
+        raise typer.Exit(1)
+    except Exception as err:  # noqa: BLE001 — last-resort clean message
+        console.print(f"[red]Live check failed: {err}[/]")
+        raise typer.Exit(1)
+
+    session_store.save(sess, settings.session_path)
+    console.print(
+        f"[green]✓ Pasted session validated and saved[/] "
+        f"({len(sess.cookies)} cookies) → {settings.session_path}"
+    )
+    _print_expiry(sess)
+
+
+def _existing_mcp_client_id(settings: Settings) -> str | None:
+    """Reuse a previously-registered OAuth client_id if one exists, instead of
+    calling register_client() again on every re-login — repeated dynamic
+    registration otherwise sprawls a new server-side client per login with no
+    cleanup path. Best-effort: any problem reading the old session just falls
+    back to a fresh registration (mcp_auth.begin_login/login's default)."""
+    if not settings.mcp_session_path.exists():
+        return None
+    try:
+        return mcp_session_store.load(settings.mcp_session_path).client_id
+    except Exception:  # noqa: BLE001 — corrupt/partial old session file; just re-register
+        return None
+
+
+def _save_mcp_session(settings: Settings, sess: McpSession) -> None:
+    mcp_session_store.save(sess, settings.mcp_session_path)
+    left_min = (sess.access_expiry - _dt.datetime.now().timestamp()) / 60
+    console.print(f"[green]✓ MCP session saved → {settings.mcp_session_path}[/]")
+    console.print(f"[dim]Access token good for ~{left_min:.0f} more min (auto-refreshes after).[/]")
+
+
 def _login_mcp(settings: Settings, *, redirect_port: int = mcp_auth.DEFAULT_REDIRECT_PORT) -> None:
     def _print_url(url: str) -> None:
         console.print(
             Panel(
                 f"Open this URL in your browser to authorize splice-cli:\n\n[bold blue]{url}[/]\n\n"
-                "[dim]Must be the same machine — the redirect is a localhost callback.[/]",
+                "[dim]Must be the same machine — the redirect is a localhost callback. "
+                "Use `--no-server` instead if it isn't.[/]",
                 title="MCP login",
             )
         )
-
-    # Reuse a previously-registered OAuth client_id if one exists, instead of
-    # calling register_client() again on every re-login — repeated dynamic
-    # registration otherwise sprawls a new server-side client per login with
-    # no cleanup path. Best-effort: any problem reading the old session just
-    # falls back to a fresh registration (mcp_auth.login's default).
-    existing_client_id: str | None = None
-    if settings.mcp_session_path.exists():
-        try:
-            existing_client_id = mcp_session_store.load(settings.mcp_session_path).client_id
-        except Exception:  # noqa: BLE001 — corrupt/partial old session file; just re-register
-            existing_client_id = None
-
     try:
         sess = mcp_auth.login(
-            client_id=existing_client_id, redirect_port=redirect_port, on_url=_print_url,
+            client_id=_existing_mcp_client_id(settings), redirect_port=redirect_port, on_url=_print_url,
         )
     except McpAuthError as err:
         console.print(f"[red]{err}[/]")
         raise typer.Exit(1)
-    mcp_session_store.save(sess, settings.mcp_session_path)
-    left_min = (sess.access_expiry - _dt.datetime.now().timestamp()) / 60
-    console.print(f"[green]✓ MCP session saved → {settings.mcp_session_path}[/]")
-    console.print(f"[dim]Access token good for ~{left_min:.0f} more min (auto-refreshes after).[/]")
+    _save_mcp_session(settings, sess)
+
+
+def _login_mcp_manual(settings: Settings, *, redirect_port: int = mcp_auth.DEFAULT_REDIRECT_PORT) -> None:
+    """No-server MCP login: print the URL, let the user paste the redirect
+    back — works from any browser, on any machine. The browser's connection-
+    refused page on the localhost redirect is expected; the code is in the URL."""
+    challenge = mcp_auth.begin_login(
+        client_id=_existing_mcp_client_id(settings), redirect_port=redirect_port
+    )
+    console.print(
+        Panel(
+            f"Open this URL in a browser on ANY machine and approve:\n\n"
+            f"[bold blue]{challenge.authorize_url}[/]\n\n"
+            "After approving, the browser will try to load a http://localhost page and show a "
+            "[bold]connection-refused error — that is expected[/], the login still worked. "
+            "Copy the [bold]full URL[/] from the address bar and paste it below.",
+            title="MCP login (manual / no-server)",
+        )
+    )
+    pasted = typer.prompt("Paste the redirect URL")
+    try:
+        sess = mcp_auth.complete_login(challenge, pasted)
+    except McpAuthError as err:
+        console.print(f"[red]{err}[/]")
+        raise typer.Exit(1)
+    _save_mcp_session(settings, sess)
 
 
 def _print_mcp_status(settings: Settings) -> None:
@@ -327,10 +458,10 @@ def status(env_file: Path = typer.Option(None, "--env")) -> None:
     _print_mcp_status(settings)
 
 
-def _bpm_range_kwargs(bpm_min: int | None, bpm_max: int | None) -> dict:
+def _bpm_range_kwargs(bpm_min: int | None, bpm_max: int | None) -> dict[str, Any]:
     """GraphQL search kwargs for a BPM range, each included only when set —
     same "omit rather than send null" rule the client's own filters use."""
-    kwargs: dict = {}
+    kwargs: dict[str, Any] = {}
     if bpm_min is not None:
         kwargs["min_bpm"] = bpm_min
     if bpm_max is not None:
@@ -405,7 +536,7 @@ def search(
                 "or drop --keyword.[/]"
             )
             raise typer.Exit(1)
-        search_kwargs: dict = {
+        search_kwargs: dict[str, Any] = {
             "limit": limit,
             "asset_type": asset_type or "sample",
             "licensed": True if licensed else None,
@@ -543,7 +674,7 @@ def _sidecar_path(target: Path) -> Path:
 
 
 def _write_metadata_sidecar(
-    target: Path, sample, *, backend: str, price: float | None = None,
+    target: Path, sample: Sample, *, backend: str, price: float | None = None,
 ) -> Path:
     """Persist the Sample's metadata alongside the downloaded file — the
     console table it came from disappears once the command exits, but the
@@ -560,7 +691,48 @@ def _write_metadata_sidecar(
     return path
 
 
-def _mcp_download(settings: Settings, sample, out_dir: Path):
+# Shared --confirm/--no-confirm option for `download`/`buy` — a tri-state
+# bool (None = "use the settings default") rather than a plain bool default,
+# so an explicit flag always wins over SPLICE_CONFIRM_BEFORE_DOWNLOAD, and
+# leaving both unset preserves the original automatic/agent-driven behavior.
+_CONFIRM = typer.Option(
+    None, "--confirm/--no-confirm",
+    help="Print the sample's splice.com listen link (+ price, for `buy`) and ask "
+    "before proceeding. Default: SPLICE_CONFIRM_BEFORE_DOWNLOAD, or off (automatic) "
+    "if that's unset too — an agent driving this CLI should leave this off.",
+)
+
+
+def _confirm_or_exit(
+    settings: Settings, sample: Sample, *, confirm: bool | None, price: float | None = None
+) -> None:
+    """The listen-first gate `download`/`buy` share: when active, print the
+    sample's splice.com page (+ price, if buying something new) and block on a
+    y/n. A decline is an ordinary abort (exit 1, not an error) — the caller
+    just changed their mind, nothing went wrong. No-op (returns immediately)
+    when neither the flag nor the env default asked for it, so the default,
+    agent-driven `download`/`buy` behavior is completely unchanged.
+    """
+    should_confirm = confirm if confirm is not None else settings.confirm_before_download
+    if not should_confirm:
+        return
+    lines = [f"[bold]{escape(sample.name)}[/]"]
+    if price is not None:
+        lines.append(f"Price: {price:g} {sample.price_currency or 'Credits'}")
+    lines.append(
+        f"Listen first: [link]{escape(sample.url)}[/]"
+        if sample.url
+        else "[dim](no direct listen link for this asset type — try `splice audition`)[/]"
+    )
+    console.print(
+        Panel("\n".join(lines), title="Confirm before downloading", border_style="cyan")
+    )
+    if not typer.confirm("Proceed?"):
+        console.print("[yellow]Cancelled.[/]")
+        raise typer.Exit(1)
+
+
+def _mcp_download(settings: Settings, sample: Sample, out_dir: Path) -> Path:
     """Fetch via MCP's download_asset — the default transfer path for the
     plain `download` command (which never records a spend, so charge and
     transfer can stay composed in one client.download() call). `buy` uses
@@ -599,7 +771,7 @@ class _PostChargeTransferError(RuntimeError):
         self.original = original
 
 
-def _report_post_charge_transfer_failure(err: "_PostChargeTransferError", uuid: str) -> None:
+def _report_post_charge_transfer_failure(err: "_PostChargeTransferError", uuid: str) -> NoReturn:
     """Clean handoff for HARDENING 8: the purchase already went through
     (and is already in the budget ledger) — only the byte transfer failed.
     Exit 1 (an ordinary failure), deliberately NOT exit 2 (no human auth
@@ -618,7 +790,7 @@ def _report_post_charge_transfer_failure(err: "_PostChargeTransferError", uuid: 
     raise typer.Exit(1)
 
 
-def _record_spend(bud, settings: Settings, sample, price: float) -> None:
+def _record_spend(bud: budget_store.Budget, settings: Settings, sample: Sample, price: float) -> None:
     """Append the purchase to the budget ledger and persist it immediately
     (atomically, via budget_store.save). Called right after a charge is
     confirmed to have succeeded — see FIX 1's invariant: the credit is spent
@@ -637,7 +809,9 @@ def _record_spend(bud, settings: Settings, sample, price: float) -> None:
     budget_store.save(bud, settings.budget_path)
 
 
-def _mcp_buy_download(settings: Settings, sample, out_dir: Path, bud, price: float | None):
+def _mcp_buy_download(
+    settings: Settings, sample: Sample, out_dir: Path, bud: budget_store.Budget, price: float | None
+) -> Path:
     """`buy`'s MCP transfer path: charge (download_asset) THEN, if a spend
     happened, record it to the ledger BEFORE streaming bytes to disk — so a
     byte-transfer failure after a successful charge still leaves the spend
@@ -659,6 +833,9 @@ def _mcp_buy_download(settings: Settings, sample, out_dir: Path, bud, price: flo
             )
         charged = price is not None and not sample.licensed
         if charged:
+            # `charged` already established `price is not None` above; spelled
+            # out again here so mypy can prove it at this call site too.
+            assert price is not None
             _record_spend(bud, settings, sample, price)
         try:
             return client.stream_to_disk(url, filename, out_dir)
@@ -676,6 +853,7 @@ def download(
         "mcp", "--backend",
         help="mcp (default, official/sanctioned) | graphql (explicit break-glass override).",
     ),
+    confirm: bool | None = _CONFIRM,
     env_file: Path = typer.Option(None, "--env"),
 ) -> None:
     """Download one exact asset's full-quality file — only if already owned.
@@ -694,7 +872,7 @@ def download(
     settings = Settings.load(env_file)
     _validate_backend(backend)
     out_dir = dest or settings.download_dir
-    target = None
+    target: Path | None = None
     try:
         sess = _session(settings)
         with SpliceClient(sess) as client:
@@ -714,13 +892,19 @@ def download(
                     )
                 )
                 raise typer.Exit(1)
+            _confirm_or_exit(settings, sample, confirm=confirm)
             if backend == "graphql":
                 target = out_dir / (sample.name.split("/")[-1])
                 client.download(sample, target)
     except AuthError as err:
         _needs_human(err)
 
-    if backend != "graphql":
+    if backend == "graphql":
+        # The branch above always sets `target` when backend == "graphql" —
+        # spelled out so both mypy and a reader can see `target` is never
+        # None by the time _write_metadata_sidecar runs below.
+        assert target is not None
+    else:
         try:
             target = _mcp_download(settings, sample, out_dir)
         except McpAuthError as err:
@@ -740,6 +924,7 @@ def buy(
         "mcp", "--backend",
         help="mcp (default, official/sanctioned) | graphql (explicit break-glass override).",
     ),
+    confirm: bool | None = _CONFIRM,
     env_file: Path = typer.Option(None, "--env"),
 ) -> None:
     """License + download one exact asset — SPENDS A CREDIT.
@@ -768,8 +953,8 @@ def buy(
     settings = Settings.load(env_file)
     out_dir = dest or settings.download_dir
     bud = budget_store.load(settings.budget_path)
-    price = None
-    target = None
+    price: float | None = None
+    target: Path | None = None
     try:
         sess = _session(settings)
         with SpliceClient(sess) as client:
@@ -784,6 +969,7 @@ def buy(
                     f'[dim]"{sample.name}" is already licensed — downloading '
                     "for free instead of buying.[/]"
                 )
+                _confirm_or_exit(settings, sample, confirm=confirm)
                 if backend == "graphql":
                     target = out_dir / (sample.name.split("/")[-1])
                     client.download(sample, target)
@@ -806,6 +992,8 @@ def buy(
                         )
                     )
                     raise typer.Exit(code=2)
+
+                _confirm_or_exit(settings, sample, confirm=confirm, price=price)
 
                 if backend == "graphql":
                     client.purchase(sample)
@@ -830,7 +1018,14 @@ def buy(
     except _PostChargeTransferError as err:
         _report_post_charge_transfer_failure(err, uuid)
 
-    if backend != "graphql":
+    if backend == "graphql":
+        # The unlicensed-sample branch above always sets `target` when
+        # backend == "graphql" (the licensed+graphql case already returned
+        # early at line ~802) — spelled out so both mypy and a reader can
+        # see `target` is never None by the time _write_metadata_sidecar
+        # runs below.
+        assert target is not None
+    else:
         try:
             # Records the spend itself, between the charge and the byte
             # transfer — see _mcp_buy_download's docstring and FIX 1.
@@ -990,7 +1185,7 @@ stack_app = typer.Typer(
 app.add_typer(stack_app, name="stack")
 
 
-def _print_stack(stack) -> None:
+def _print_stack(stack: Stack) -> None:
     bpm_key = f"  ({stack.bpm} BPM, {stack.key})" if stack.bpm else ""
     console.print(f"[bold]{stack.name or stack.stack_uuid}[/]{bpm_key}  [dim]{stack.stack_uuid}[/]")
     table = Table()
@@ -1049,13 +1244,13 @@ def stack_prompt(
     _print_stack(stack)
 
 
-def _parse_swap_layers(pairs: list[str]) -> list[dict]:
+def _parse_swap_layers(pairs: list[str]) -> list[dict[str, str]]:
     """Parse repeated `--swap layer_uuid:asset_uuid` values into the
     `[{"layer_uuid":..., "asset_uuid":...}]` shape update_stack's
     `swap_layers` expects. Exits 1 on a malformed value (not "uuid:uuid")
     rather than passing garbage through to the MCP tool call.
     """
-    swaps = []
+    swaps: list[dict[str, str]] = []
     for pair in pairs:
         parts = pair.split(":")
         if len(parts) != 2 or not parts[0].strip() or not parts[1].strip():

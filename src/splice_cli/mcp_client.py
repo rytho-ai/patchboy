@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import Any, cast
 
 import httpx
 
@@ -35,7 +36,7 @@ class McpRateLimitError(RuntimeError):
     """
 
 
-def _parse_sse(text: str) -> dict:
+def _parse_sse(text: str) -> dict[str, Any]:
     """Streamable-HTTP responses are SSE-framed even for single replies.
 
     A stream can carry more than one `data:` event before the terminal
@@ -48,7 +49,7 @@ def _parse_sse(text: str) -> dict:
     gets *something* to raise a clear error about instead of this function
     raising first.
     """
-    last_parsed: dict | None = None
+    last_parsed: dict[str, Any] | None = None
     for line in text.splitlines():
         if not line.startswith("data:"):
             continue
@@ -173,6 +174,10 @@ def _parse_search_markdown(text: str) -> tuple[list[Sample], int | None]:
                 # MCP's search output doesn't report licensed/price — those
                 # are GraphQL-only fields (see mcp-implementation-plan.md
                 # §3d/§5d); leave at model defaults (False / None).
+                # MCP hands us the real splice.com link text directly (unlike
+                # GraphQL, which needs the content-hash reconstruction in
+                # client.py) — just carry it through as-is.
+                url=link_m.group(1) if link_m else None,
             )
         )
     return samples, total
@@ -312,6 +317,7 @@ def _parse_stack_markdown(text: str) -> Stack:
                     key=layer_key,
                     duration_seconds=layer_duration,
                     tags=tags,
+                    url=link_m.group(1) if link_m else None,
                 ),
             )
         )
@@ -373,7 +379,7 @@ class McpClient:
         self._http.post(_MCP_URL, json={"jsonrpc": "2.0", "method": "notifications/initialized"})
         self._initialized = True
 
-    def _call_tool(self, name: str, arguments: dict) -> dict:
+    def _call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         self._ensure_initialized()
         resp = self._http.post(
             _MCP_URL,
@@ -402,7 +408,7 @@ class McpClient:
                 f"MCP response for {name!r} had neither `result` nor `error` "
                 f"in its JSON-RPC envelope: {data!r}"
             )
-        result = data["result"]
+        result = cast(dict[str, Any], data["result"])
         if result.get("isError"):
             content = result.get("content", [])
             text = content[0].get("text", "") if content else ""
@@ -423,7 +429,7 @@ class McpClient:
         GraphQL's SamplesSearch (verified: different retrieval tech) — don't
         assume the same query returns the same top hit across backends.
         """
-        args: dict = {"query": query}
+        args: dict[str, Any] = {"query": query}
         if sample_type is not None:
             args["type"] = sample_type
         if bpm_min is not None:
@@ -503,7 +509,7 @@ class McpClient:
         itself explains this rather than silently searching for a substitute
         if given a one-shot uuid.
         """
-        args: dict = {"asset_uuid": asset_uuid}
+        args: dict[str, Any] = {"asset_uuid": asset_uuid}
         if name is not None:
             args["name"] = name
         if bpm is not None:
@@ -522,7 +528,7 @@ class McpClient:
     ) -> Stack:
         """Generate a complete multi-track arrangement from a text prompt
         alone (no seed uuid) — free, same as create_stack."""
-        args: dict = {"prompt": prompt}
+        args: dict[str, Any] = {"prompt": prompt}
         if bpm_min is not None:
             args["bpm_min"] = bpm_min
         if bpm_max is not None:
@@ -541,7 +547,7 @@ class McpClient:
         remove_layer_uuids: list[str] | None = None,
         add_compatible_layers: bool | None = None,
         swap_compatible_layers: bool | None = None,
-        swap_layers: list[dict] | None = None,
+        swap_layers: list[dict[str, str]] | None = None,
     ) -> Stack:
         """Modify an existing stack (add/remove/swap layers, rename, re-BPM).
 
@@ -551,7 +557,7 @@ class McpClient:
         former is "the user chose this exact sample," the latter is "let
         the AI choose." Max 8 layers; at least one modification required.
         """
-        args: dict = {"stack_uuid": stack_uuid}
+        args: dict[str, Any] = {"stack_uuid": stack_uuid}
         if name is not None:
             args["name"] = name
         if bpm is not None:
@@ -584,7 +590,7 @@ class McpClient:
             raise RuntimeError(f"Could not find a Public Share URL in the MCP response: {text[:300]!r}")
         return url_m.group(1)
 
-    def _stack_result(self, tool: str, args: dict) -> Stack:
+    def _stack_result(self, tool: str, args: dict[str, Any]) -> Stack:
         result = self._call_tool(tool, args)
         content = result.get("content", [])
         text = content[0].get("text", "") if content else ""

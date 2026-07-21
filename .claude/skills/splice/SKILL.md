@@ -101,9 +101,25 @@ Run `splice status` before any session-dependent work. Its exit code (and
 
 Two situations produce exit 2:
 
-1. **No/expired session.** Tell the user: "Log into splice.com in your
-   browser (pass the human-check by hand), then I'll run `splice login`."
-   If `--browser auto` didn't find one, ask which browser they used.
+1. **No/expired session.**
+   - GraphQL, same machine as the user's browser: tell the user "Log into
+     splice.com in your browser (pass the human-check by hand), then I'll run
+     `splice login`." If `--browser auto` didn't find one, ask which browser
+     they used.
+   - GraphQL, a DIFFERENT machine than the user's browser: run
+     `splice login --paste` — it prints the exact two things to relay (a
+     DevTools Network-tab Cookie header, and `navigator.userAgent` from the
+     console); walk the user through both, feed their pastes to the prompts.
+     It live-validates before saving, so a bad paste just means asking them to
+     grab fresh values, not a broken session file. Mention up front that
+     they'll need to repeat this roughly hourly (the cookie is short-lived) —
+     `--mcp --no-server` is the lower-maintenance choice if MCP covers the task.
+   - MCP: **never run `splice login --mcp` (loopback mode) yourself** — your
+     sandbox's loopback is very likely not the user's real browser's loopback
+     (same trap as spotify-cli). Use the two-call `begin_login`/`complete_login`
+     recipe in `CLAUDE.md` → "Agent-driven MCP login" instead: build+persist
+     the challenge, give the user the URL, they paste the redirect back, you
+     complete it. Don't reinvent PKCE.
 2. **Budget stop** (from `splice buy`). This means "top up `splice budget
    set` or raise `--max-item`" — NOT "ask permission for this specific
    item." Relay it the same way.
@@ -169,6 +185,14 @@ The user authorizes a pool once via `splice budget set`; within it, `splice
 buy` just works, no "are you sure?" per item. Asking every time would defeat
 the entire point of granting a budget — don't add a confirmation step the
 design deliberately removed.
+
+`download`/`buy --confirm` exists (prints the sample's splice.com listen link
++ price, blocks on y/n) but it's for a **human** running the command
+interactively, not you — **never pass `--confirm` yourself**, and don't turn
+on `SPLICE_CONFIRM_BEFORE_DOWNLOAD` on the user's behalf. If the user wants a
+listen-first flow they'll ask for it or set that env var themselves; your
+default `splice buy` call should stay exactly as autonomous as this section
+already describes.
 
 - Just run `splice buy` when the user wants something new. It self-enforces
   the remaining pool and a per-item price cap, refusing cleanly (exit 2) if

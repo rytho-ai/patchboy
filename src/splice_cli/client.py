@@ -7,8 +7,10 @@ download) are stable; their innards get rewritten when Splice changes.
 
 from __future__ import annotations
 
+import re
 from importlib import resources
 from pathlib import Path
+from typing import Any, cast
 
 import httpx
 
@@ -40,7 +42,7 @@ def _load_query(name: str) -> str:
     return resources.files("splice_cli").joinpath(f"{name}.graphql").read_text()
 
 
-def _check_response(resp: httpx.Response) -> dict:
+def _check_response(resp: httpx.Response) -> dict[str, Any]:
     """Parse a GraphQL response, raising SessionExpired for any auth failure.
 
     Splice's gateway reports an expired/invalid session two different ways:
@@ -70,15 +72,41 @@ def _check_response(resp: httpx.Response) -> dict:
                     "interact with splice.com there first so it refreshes."
                 )
         raise RuntimeError(f"Splice GraphQL error: {body['errors']}")
-    return body
+    return cast(dict[str, Any], body)
 
 
 # Asset types the "all" fan-out covers. `generated_sample` is excluded — it
 # 500s with this filter shape, and it's a niche AI-variant type anyway.
 ASSET_TYPES = ("sample", "preset", "midi", "pack")
 
+# The content-hash filename Splice's preview mp3 is stored under, e.g.
+# ".../audio_samples/cae9e1dd...-scrambled/cae9e1dd....mp3?X-Amz-...". This
+# same hash is the path segment splice.com/sounds/sample/<hash>/ resolves to
+# (verified live 2026-07-21: GET on that URL 200s and lands on the right page).
+_PREVIEW_HASH_RE = re.compile(r"([0-9a-fA-F]{40,})\.mp3")
 
-def _to_sample(item: dict) -> Sample:
+
+def _sample_page_url(*, asset_type: str, preview_url: str | None) -> str | None:
+    """Build the splice.com page a human can open to listen before deciding.
+
+    Deliberately does NOT use `item["uuid"]` — verified live 2026-07-21 that
+    it means two DIFFERENT things depending on which query populated it:
+    assetsSearch's `uuid` is the content-hash needed here, but AssetByUuid's
+    `uuid` just echoes back the queried catalog_uuid (confirmed: building the
+    URL from get_sample()'s `uuid` 404s). The content hash is reliably
+    extractable from the preview mp3's filename on BOTH query paths instead,
+    so that's the one source of truth here. Only for asset_type == "sample" —
+    other types' page-URL scheme hasn't been verified against a real one.
+    """
+    if asset_type != "sample" or not preview_url:
+        return None
+    m = _PREVIEW_HASH_RE.search(preview_url)
+    if not m:
+        return None
+    return f"https://splice.com/sounds/sample/{m.group(1)}/"
+
+
+def _to_sample(item: dict[str, Any]) -> Sample:
     """Map one assetsSearch item onto our stable Sample shape."""
     preview = next(
         (
@@ -88,6 +116,7 @@ def _to_sample(item: dict) -> Sample:
         ),
         None,
     )
+    asset_type = item.get("asset_type_slug") or "sample"
     # name looks like "Pack_Name/path/to/file.wav" — first segment is the pack.
     raw_name = item.get("name") or ""
     pack = raw_name.split("/", 1)[0] if "/" in raw_name else None
@@ -100,7 +129,7 @@ def _to_sample(item: dict) -> Sample:
         uuid=item["uuid"],
         catalog_uuid=item.get("catalog_uuid"),
         name=raw_name,
-        asset_type=item.get("asset_type_slug") or "sample",
+        asset_type=asset_type,
         pack_name=pack,
         provider_name=provider.get("name"),
         bpm=item.get("bpm"),
@@ -111,6 +140,7 @@ def _to_sample(item: dict) -> Sample:
         price=price.get("amount"),
         price_currency=price.get("currency"),
         preview_url=preview,
+        url=_sample_page_url(asset_type=asset_type, preview_url=preview),
     )
 
 
@@ -151,7 +181,7 @@ class SpliceClient:
             raise RuntimeError(
                 "No active subscription found — can't read a live credit balance."
             )
-        return sub["credits"]
+        return float(sub["credits"])
 
     def get_sample(self, catalog_uuid: str) -> Sample:
         """Look up one asset by its catalog_uuid — the precise counterpart to

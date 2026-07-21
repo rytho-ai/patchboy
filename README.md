@@ -42,11 +42,35 @@ Design commitments:
 2. Access token (~1hr) auto-refreshes headlessly afterward via a refresh
    token scoped to this client — no browser dependency after the first grant.
 
+**MCP on a different machine (SSH, headless, remote box):** the default
+`login --mcp` needs the authorizing browser on the SAME machine (the redirect
+is a `localhost` callback). `splice login --mcp --no-server` instead prints the
+URL and waits for you to paste the redirect back — open it in **any** browser,
+on any machine, then copy the full redirect URL (the connection-refused page
+it lands on afterward is expected) back into the terminal running the CLI.
+Once done, the refresh token needs no browser ever again — unlike the GraphQL
+session below, which needs periodic local re-lifting.
+
 **GraphQL (capability-gap / break-glass backend):**
 1. Log into **splice.com** in your browser, by hand, once.
 2. `splice login` lifts that session (cookies + matching User-Agent) from the
    browser's cookie store.
 3. Everything after is pure HTTP with the lifted session — **no browser runs**.
+
+**GraphQL on a different machine (no browser of its own, or a different one
+than the CLI runs on):** `splice login` reads the browser's cookie store
+directly, so it needs to run on the SAME machine as that browser.
+`splice login --paste` is the manual counterpart — it prints the exact
+DevTools steps, then prompts for two pastes: the `Cookie:` request header
+value (Network tab → any splice.com request — this reaches httpOnly cookies
+that `document.cookie` in the JS console can't see) and the `User-Agent`
+(`navigator.userAgent` in the console — `cf_clearance` is bound to this exact
+string, so it must match). It live-validates the paste with a real search
+call BEFORE saving, so a bad paste fails loudly instead of silently clobbering
+a working session. **This does not remove the periodic-refresh burden** —
+Splice's auth cookie is short-lived (~1hr) whether lifted or pasted; a machine
+you'll use repeatedly is better served by `--mcp` (see below), whose refresh
+token needs no browser ever again.
 
 **Browsers (GraphQL only):** Firefox is the easy case (unencrypted cookies on
 Linux). Chrome, Chromium, Brave, and Edge encrypt cookies via the OS keyring —
@@ -167,7 +191,9 @@ splice budget set 10                   # authorize a standing spend pool
 
 # bridge — one-time grants, independent of each other
 splice login --mcp                     # OAuth-authorize the official MCP (default backend)
+splice login --mcp --no-server         # same, but paste the redirect back — any browser, any machine
 splice login [--browser chrome]        # lift a GraphQL session (capability-gap backend)
+splice login --paste                   # same, but paste cookies + UA yourself — any machine
 
 # free to run once a session/budget exist
 splice status                          # GraphQL live probe + MCP token status (local check, no spend risk)
@@ -189,6 +215,9 @@ splice buy <catalog_uuid>              # license + download — spends a credit,
 # (BPM/key/pack/tags/etc.) next to the file, automatically, no flag needed
 # both take --backend graphql to explicitly break-glass around the MCP default
 # (--backend only accepts mcp|graphql — a typo errors clearly, exit 1)
+# both take --confirm/--no-confirm: print the sample's splice.com listen link
+# (+ price, for buy) and ask before proceeding — a HUMAN, listen-first gate,
+# off by default (see "Listen before you download" below)
 
 # Stacks — MCP-only, no GraphQL equivalent. Building/updating is free; only
 # downloading a printed layer catalog_uuid (via download/buy) can spend.
@@ -238,6 +267,36 @@ purchase. The design, settled deliberately:
   anywhere, so `buy` checks affordability via GraphQL first, then does the
   purchase+download through MCP's `download_asset` (1 credit is the assumed,
   catalog-standard cost).
+
+## Listen before you download
+
+`download`/`buy` take `--confirm`/`--no-confirm`: print the sample's
+splice.com page (+ price, for `buy`) and block on a y/n before proceeding.
+
+```bash
+splice buy <catalog_uuid> --confirm     # "Listen first: https://splice.com/sounds/sample/…" → y/n
+```
+
+This is an **opt-in human gate**, layered on top of the budget system above —
+it does NOT replace it. The default (no flag, no env var) is unchanged:
+`buy` still spends autonomously from the standing pool, no per-purchase
+prompt, exactly as before — an agent driving this CLI should leave `--confirm`
+off. Turn it on when *you* are the one running the command and want to listen
+first: either per-call (`--confirm`) or as a standing default
+(`SPLICE_CONFIRM_BEFORE_DOWNLOAD=true` in `.env`), with the flag always
+winning over the env default when both are set. A decline is a clean exit 1
+("Cancelled") — nothing was charged, nothing was downloaded.
+
+The listen link (`Sample.url`) is only populated for `asset_type == "sample"`
+(verified live 2026-07-21 against a real search + a real `download`/`buy`-style
+lookup; other asset types — preset/midi/pack — show a "no direct listen link"
+fallback instead of a guessed, possibly-404 URL). On the GraphQL backend it's
+reconstructed from the preview mp3's own filename (a content-hash), not from
+Splice's `uuid` field — that field means two *different* things depending on
+which GraphQL query populated it, verified live: `assetsSearch`'s `uuid` is a
+content hash, but the by-catalog_uuid lookup `download`/`buy` uses just echoes
+back the id you queried with (building a URL from that 404s). MCP already
+returns the real link as literal text, so that backend just carries it through.
 
 ## Status
 

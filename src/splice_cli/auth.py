@@ -34,7 +34,8 @@ def _jwt_exp(token: str) -> float | None:
         payload_b64 = token.split(".")[1]
         padded = payload_b64 + "=" * (-len(payload_b64) % 4)
         payload = json.loads(base64.urlsafe_b64decode(padded))
-        return payload.get("exp")
+        exp = payload.get("exp")
+        return None if exp is None else float(exp)
     except (IndexError, ValueError, json.JSONDecodeError):
         return None
 
@@ -82,6 +83,44 @@ class Session:
 
 # Browsers we know how to lift from, in auto-detect priority order.
 SUPPORTED = ("firefox", "chrome", "chromium", "brave", "edge")
+
+
+def _parse_cookie_header(text: str) -> dict[str, str]:
+    """Parse a `Cookie:` request-header VALUE (`name1=value1; name2=value2`)
+    into a dict — the format DevTools' Network tab shows for any request's
+    Cookie header, which is how a human retrieves httpOnly cookies (Splice's
+    auth cookies are httpOnly, so `document.cookie` in the JS console can't
+    see them — the Network tab request header can). Split on the FIRST `=`
+    only per pair: `_splice_token_prod`'s JWT value legitimately contains `=`
+    padding characters of its own.
+    """
+    cookies: dict[str, str] = {}
+    for part in text.split(";"):
+        part = part.strip()
+        if not part or "=" not in part:
+            continue
+        name, _, value = part.partition("=")
+        name = name.strip()
+        if name:
+            cookies[name] = value.strip()
+    return cookies
+
+
+def parse_pasted_session(cookie_header: str, user_agent: str, *, source: str = "pasted") -> Session:
+    """Build a Session from cookies + UA a human pasted, instead of lifting
+    them from a local browser's cookie store — the manual counterpart to
+    firefox.py/chrome.py, for a machine with no browser of its own (or a
+    different one than the CLI runs on). Reuses Session.__post_init__'s
+    existing validation (raises NoSessionError if AUTH_COOKIE is absent) —
+    no new validation logic needed here.
+
+    `clearance_expiry` is deliberately left at its default (None): a raw
+    Cookie header carries no expiry metadata, unlike what firefox.py/chrome.py
+    read from the browser's cookie *store* (which does). Harmless — it only
+    powers an early "expiring soon" warning in `status`, nothing functional.
+    """
+    cookies = _parse_cookie_header(cookie_header)
+    return Session(cookies=cookies, user_agent=user_agent.strip(), source=source)
 
 
 def extract_session(browser: str = "auto") -> Session:

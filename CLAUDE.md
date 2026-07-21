@@ -92,6 +92,15 @@ that finds one violated is a blocker.
    boundary is that it is never routine.
 4. **No automatic reroute around the MCP rate limit** (see the two-backends
    rule). `McpRateLimitError` reports and stops.
+5. **`--confirm` is a separate, opt-in layer — it must never become the
+   authorization mechanism.** `download`/`buy --confirm` (or
+   `SPLICE_CONFIRM_BEFORE_DOWNLOAD`) prints the sample's splice.com page +
+   price and blocks on a y/n (`_confirm_or_exit` in cli.py) — but this is for
+   a human who wants to listen first, not a replacement for invariant #3's
+   budget-is-the-standing-consent design. Default OFF; an agent driving this
+   CLI should never pass `--confirm`. Don't let this flag's existence become
+   an excuse to weaken the budget/cap checks — they still gate every `buy`
+   regardless of whether `--confirm` is set.
 
 ## Human-in-the-loop — the exit-code convention
 
@@ -106,6 +115,94 @@ Every command follows it; agents key off the code:
 `login` needs a human to pass a browser gate first (Turnstile for GraphQL,
 OAuth consent for MCP); the CLI only completes the bridge afterward.
 
+## Agent-driven MCP login — split across two tool calls, no loopback needed
+
+`splice login --mcp`'s default (loopback server) assumes the authorizing
+browser is on the SAME machine your Bash tool runs on — usually false for an
+AI assistant: your sandbox's loopback is very likely not the user's real
+browser's loopback (same class of trap as spotify-cli's login — see its
+CLAUDE.md for the confirmed-live symptom: a socket that shows `LISTEN` in your
+own shell can still be unreachable from the user's actual desktop). **Never
+assume otherwise — always use the manual flow below instead of running
+`splice login --mcp` (no `--no-server`) yourself.**
+
+Splice's MCP OAuth is a browser-consent flow (not a cookie paste like Apple
+Music's), so the primitives to reuse are `mcp_auth.begin_login` /
+`mcp_auth.complete_login` — split across two tool invocations, with the
+challenge persisted to disk between them:
+
+1. First call — build the challenge, persist it, print the URL:
+   ```bash
+   uv run python3 - <<'PYEOF'
+   import json
+   from pathlib import Path
+   from splice_cli.config import Settings
+   from splice_cli import mcp_auth, mcp_session as mcp_session_store
+
+   settings = Settings.load()
+   existing_client_id = None
+   if settings.mcp_session_path.exists():
+       try:
+           existing_client_id = mcp_session_store.load(settings.mcp_session_path).client_id
+       except Exception:
+           pass
+   ch = mcp_auth.begin_login(client_id=existing_client_id, redirect_port=mcp_auth.DEFAULT_REDIRECT_PORT)
+   p = Path.home() / ".splice-cli" / ".mcp-login-challenge.json"
+   p.parent.mkdir(parents=True, exist_ok=True)
+   p.write_text(json.dumps({
+       "authorize_url": ch.authorize_url, "verifier": ch.verifier,
+       "state": ch.state, "redirect_uri": ch.redirect_uri, "client_id": ch.client_id,
+   }))
+   p.chmod(0o600)
+   print("AUTHORIZE_URL:" + ch.authorize_url)
+   PYEOF
+   ```
+2. Give the user the printed URL. Tell them: open it in their own browser
+   (any machine), log in, approve — the browser will then show a
+   connection-refused-looking error on the `localhost` redirect, **that's
+   expected**, ignore it. Copy the **full** URL from the address bar (must
+   include `?code=...&state=...`) and paste it back to you.
+3. Second call (only after they reply) — load the persisted challenge,
+   complete the exchange, save the session, clean up:
+   ```bash
+   PASTED_URL='<paste exactly what they gave you>' uv run python3 - <<'PYEOF'
+   import os, json
+   from pathlib import Path
+   from splice_cli.config import Settings
+   from splice_cli import mcp_auth, mcp_session as mcp_session_store
+   from splice_cli.mcp_auth import LoginChallenge, McpAuthError
+
+   settings = Settings.load()
+   p = Path.home() / ".splice-cli" / ".mcp-login-challenge.json"
+   ch = LoginChallenge(**json.loads(p.read_text()))
+   try:
+       sess = mcp_auth.complete_login(ch, os.environ["PASTED_URL"])
+   except McpAuthError as err:
+       print("LOGIN_FAILED: " + str(err)); raise SystemExit(1)
+   mcp_session_store.save(sess, settings.mcp_session_path)
+   p.unlink(missing_ok=True)
+   print(f"LOGIN_OK saved_to={settings.mcp_session_path}")
+   PYEOF
+   ```
+4. Verify with `uv run splice status` before doing anything else.
+
+The one thing you can never do for the user is the actual browser click — that
+needs their own Splice credentials. Everything else above is fair game.
+
+**The GraphQL cookie-lift `splice login` has its own manual counterpart:
+`splice login --paste`.** It needs no loopback/OAuth machinery — no challenge
+to persist across two calls, no PKCE — because there's nothing to "begin";
+just relay the two DevTools steps from `--paste`'s own printed instructions
+(Network tab → Cookie request header; console → `navigator.userAgent`) to the
+user, then run `splice login --paste` and feed their two pastes to its two
+`typer.prompt` calls in one sitting. Unlike the MCP recipe above, this needs
+NO disk-persisted challenge between calls — nothing here is short-lived
+mid-flow, so it's a single tool invocation once you have both pastes in hand.
+Be honest with the user about the tradeoff versus `--mcp`: `--paste` fixes
+"wrong machine," not "needs periodic refresh" — Splice's auth cookie stays
+~1hr-lived either way, lifted or pasted, so a machine you'll keep using is
+better served by `--mcp --no-server` if MCP covers what they need.
+
 ## Identifier discipline — two ids, never mixed
 
 `search`/`audition`/`preview` take a free-text **query** (fuzzy "top hit"
@@ -115,6 +212,17 @@ hit can shift between calls and anything that spends money or writes a file
 must pin the exact asset. `stack` layers add a third id, **layer_uuid**
 (identifies a layer within a stack, distinct from that layer's own sample
 catalog_uuid). Keep these straight in code and in help text.
+
+**A fourth trap, specific to GraphQL's `uuid` field: it is NOT one stable id —
+its meaning depends on which query populated it.** Verified live 2026-07-21:
+`assetsSearch`'s per-item `uuid` is a content hash (also embedded in the
+preview mp3's filename); `AssetByUuid` (what `get_sample()` — i.e.
+`download`/`buy` — calls) instead echoes back the `catalog_uuid` you queried
+with, as its `uuid` field. Building a splice.com sample-page URL from the
+latter 404s. `client.py::_sample_page_url` exists specifically to route around
+this by deriving the content hash from `preview_url` instead of trusting
+`item["uuid"]` — do not "simplify" that back to `item["uuid"]` without
+re-verifying live against both query paths, not just search.
 
 ## Adding a capability — which layer
 

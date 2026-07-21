@@ -27,6 +27,7 @@ import time
 import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any, cast
 
 import httpx
 
@@ -78,7 +79,7 @@ def register_client(client_name: str = "splice-cli", redirect_port: int = DEFAUL
     )
     if resp.status_code != 201:
         raise McpAuthError(f"Client registration failed (status {resp.status_code}): {resp.text}")
-    return resp.json()["client_id"]
+    return cast(str, resp.json()["client_id"])
 
 
 def _pkce_pair() -> tuple[str, str]:
@@ -127,6 +128,50 @@ def _await_callback(port: int, timeout: int) -> tuple[str | None, str | None]:
     return result["code"], result["state"]
 
 
+@dataclass(frozen=True)
+class LoginChallenge:
+    """The per-attempt secrets needed to finish a login: the URL to open, plus
+    the PKCE verifier / CSRF state / client_id the token exchange needs. Shared
+    by both the loopback-server flow (`login`) and the manual paste flow
+    (`begin_login` + `complete_login`) — the same challenge drives either."""
+
+    authorize_url: str
+    verifier: str
+    state: str
+    redirect_uri: str
+    client_id: str
+
+
+def begin_login(
+    *, client_id: str | None = None, redirect_port: int = DEFAULT_REDIRECT_PORT
+) -> LoginChallenge:
+    """Build the authorize URL + PKCE/state for one login attempt, without
+    blocking on anything. Splitting this out of `login()` is what makes the
+    manual (`--no-server`) flow and agent-driven two-call logins possible —
+    build+persist the challenge here, complete it later with `complete_login`.
+    """
+    client_id = client_id or register_client(redirect_port=redirect_port)
+    verifier, challenge = _pkce_pair()
+    state = secrets.token_urlsafe(16)
+    redirect_uri = f"http://localhost:{redirect_port}/callback"
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": _SCOPE,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+        "state": state,
+    }
+    return LoginChallenge(
+        authorize_url=f"{_AUTHORIZE_EP}?{urllib.parse.urlencode(params)}",
+        verifier=verifier,
+        state=state,
+        redirect_uri=redirect_uri,
+        client_id=client_id,
+    )
+
+
 def login(
     *,
     client_id: str | None = None,
@@ -138,23 +183,13 @@ def login(
 
     `on_url` receives the authorize URL to open (defaults to printing it) —
     the CLI overrides this to render it however it likes. Blocks until the
-    browser redirects back or `timeout` elapses.
+    browser redirects back or `timeout` elapses. Needs the browser on the SAME
+    machine as this process (the redirect is a loopback URL) — when that
+    doesn't hold (remote/SSH, or an agent driving the login), use
+    `begin_login` + `complete_login` instead (see `--no-server` in cli.py).
     """
-    client_id = client_id or register_client(redirect_port=redirect_port)
-    verifier, challenge = _pkce_pair()
-    state = secrets.token_urlsafe(16)
-    redirect_uri = f"http://localhost:{redirect_port}/callback"
-
-    params = {
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "scope": _SCOPE,
-        "code_challenge": challenge,
-        "code_challenge_method": "S256",
-        "state": state,
-    }
-    on_url(f"{_AUTHORIZE_EP}?{urllib.parse.urlencode(params)}")
+    ch = begin_login(client_id=client_id, redirect_port=redirect_port)
+    on_url(ch.authorize_url)
 
     code, returned_state = _await_callback(redirect_port, timeout)
     if not code:
@@ -162,9 +197,44 @@ def login(
             "No authorization code received — the browser login didn't "
             "complete in time, or was cancelled. Try again."
         )
-    if returned_state != state:
+    if returned_state != ch.state:
         raise McpAuthError("OAuth state mismatch — aborting (possible tampering).")
+    return _exchange_code(ch.client_id, code, ch.redirect_uri, ch.verifier)
 
+
+def complete_login(challenge: LoginChallenge, redirect_response: str) -> McpSession:
+    """Finish a manual (no-server) login from what the user pasted back.
+
+    Accepts either the FULL redirect URL from the browser's address bar
+    (preferred — carries `state`, so we can verify it) or a bare `code` (works,
+    but the CSRF `state` check is skipped; PKCE still protects the exchange).
+    """
+    code, returned_state = _parse_redirect_response(redirect_response)
+    if not code:
+        raise McpAuthError(
+            "Couldn't find an authorization code in what you pasted. Paste the "
+            "full redirect URL from the browser's address bar (the "
+            "http://localhost/... one — the connection-refused page is expected)."
+        )
+    if returned_state is not None and returned_state != challenge.state:
+        raise McpAuthError("OAuth state mismatch — aborting (possible tampering).")
+    return _exchange_code(challenge.client_id, code, challenge.redirect_uri, challenge.verifier)
+
+
+def _parse_redirect_response(text: str) -> tuple[str | None, str | None]:
+    """Pull (code, state) from either a full redirect URL/query string or a
+    bare code. Returns (None, None) if no code is present; state is None for
+    a bare code."""
+    text = text.strip()
+    if not text:
+        return None, None
+    if "code=" in text or "://" in text or text.startswith("/") or text.startswith("?"):
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(text).query)
+        return qs.get("code", [None])[0], qs.get("state", [None])[0]
+    return text, None  # a bare code was pasted — no state to check
+
+
+def _exchange_code(client_id: str, code: str, redirect_uri: str, verifier: str) -> McpSession:
     resp = httpx.post(
         _TOKEN_EP,
         data={
@@ -178,8 +248,7 @@ def login(
     )
     if resp.status_code != 200:
         raise McpAuthError(f"Token exchange failed (status {resp.status_code}): {resp.text}")
-    tok = resp.json()
-    return _session_from_token_response(client_id, tok)
+    return _session_from_token_response(client_id, resp.json())
 
 
 def refresh(session: McpSession) -> McpSession:
@@ -212,7 +281,7 @@ def refresh(session: McpSession) -> McpSession:
     return _session_from_token_response(session.client_id, tok)
 
 
-def _session_from_token_response(client_id: str, tok: dict) -> McpSession:
+def _session_from_token_response(client_id: str, tok: dict[str, Any]) -> McpSession:
     return McpSession(
         client_id=client_id,
         access_token=tok["access_token"],

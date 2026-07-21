@@ -23,6 +23,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 import json
 
 
@@ -43,7 +44,7 @@ class Budget:
     spent: float = 0.0
     per_item_cap: float = DEFAULT_PER_ITEM_CAP
     # Append-only audit trail: every purchase made against this budget.
-    log: list[dict] = field(default_factory=list)
+    log: list[dict[str, Any]] = field(default_factory=list)
     # Splice's live credit balance the first time `budget set` ever ran.
     # `reconcile` compares (baseline - live_now) against `spent` to catch
     # drift — set once, never overwritten by later top-ups, since `spent`
