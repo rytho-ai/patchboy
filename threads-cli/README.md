@@ -9,10 +9,15 @@ for a Threads app).
 Sibling of `spotify-cli` (thin-shell shape, exit-code contract) and
 `splice-cli` (the manual OAuth paste-back mechanics this borrows).
 
-> **Status: scaffolded, not live-tested.** There is no real Meta Threads app
-> to test against yet — every endpoint/param shape below reflects the public
-> docs as read on 2026-07-21; several are marked `# verify-live` in the code
-> and must be re-confirmed once a real app exists. See `CLAUDE.md` for the
+> **Status: ⏸ PARKED (scaffolded, not live-tested).** Deliberately deferred as
+> of 2026-07-21 — the code is complete and green (ruff/mypy/57 tests, all
+> mocked) but has NEVER run against a real Meta Threads app. Before relying on
+> it: register the Meta app (`threads setup`), `threads login`, and confirm the
+> `# verify-live`-marked shapes (the long-lived-token exchange, the refresh
+> params, the insights value shape, `access_token`-as-query-param) against real
+> responses — some are best-guess Meta-standard patterns and may need fixing.
+> Every endpoint/param shape below reflects the public docs as read on
+> 2026-07-21. See `CLAUDE.md` for the
 > full list.
 
 ## What this CLI can't do (read this before assuming otherwise)
