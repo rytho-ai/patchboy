@@ -70,7 +70,13 @@ _SORT_MAP = {
 
 
 def _toolkit() -> YouTubeToolkit:
-    return YouTubeToolkit()
+    # Settings owns the env-var knowledge (config.py); commands that take
+    # --env have already load_dotenv'd that file by the time we get here.
+    settings = Settings.load()
+    return YouTubeToolkit(
+        request_timeout_sec=settings.request_timeout_sec,
+        transport_retries=settings.transport_retries,
+    )
 
 
 @contextmanager

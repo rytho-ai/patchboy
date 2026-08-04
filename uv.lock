@@ -44,6 +44,7 @@ dependencies = [
     { name = "typing-extensions", marker = "python_full_version < '3.13'" },
     { name = "yarl" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/1d/cc/58f26f118d8099f84e009ce560b9148a3f803e63fa8473b57feb67241875/aiohttp-3.14.2.tar.gz", hash = "sha256:f96821eb2ae2f12b0dfa799eafbf221f5621a9220b457b4744a269a63a5f3a6c", size = 7969860, upload-time = "2026-07-20T19:53:26.881Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/86/37/6a24e23d559bc2d042287cee15b4a6e61b46f844d2b3c96832483f854a4a/aiohttp-3.14.2-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:ceb77c159b2b4c1a179b96a26af36bcaa68eb79c393ec4f569386a69d013cbe9", size = 765793, upload-time = "2026-07-20T19:49:37.707Z" },
     { url = "https://files.pythonhosted.org/packages/dc/14/23aa28408805efe6adc0e97048f5cd6028a2a3036d237038f45d10dc05a6/aiohttp-3.14.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:3f3381f81bc1c6cbe160b2a3708d39d05014329118e6b648b95edc841eeeebd4", size = 517440, upload-time = "2026-07-20T19:49:40.182Z" },
@@ -2629,8 +2630,8 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "youtube-toolkit"
-version = "2.0.2"
-source = { git = "https://github.com/rytho-ai/youtube-toolkit.git#c54a7a84f8d0e10875348916efc9ed9dc63ddcc7" }
+version = "2.1.0"
+source = { git = "https://github.com/rytho-ai/youtube-toolkit.git#a8d0cfbbd83efa46f6d6be495b3acdf7e963d736" }
 dependencies = [
     { name = "google-api-python-client" },
     { name = "google-auth-httplib2" },

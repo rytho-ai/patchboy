@@ -814,3 +814,53 @@ def test_subscriptions_not_logged_in_exits_2(monkeypatch):
     result = runner.invoke(cli.app, ["subscriptions"])
     assert result.exit_code == 2, result.output
     assert "Login needed" in result.output
+
+
+# --- Network policy: env vars -> Settings -> YouTubeToolkit ----------------
+
+
+def test_settings_network_policy_defaults(monkeypatch):
+    monkeypatch.delenv("YOUTUBE_REQUEST_TIMEOUT_SEC", raising=False)
+    monkeypatch.delenv("YOUTUBE_TRANSPORT_RETRIES", raising=False)
+    settings = Settings.load()
+    assert settings.request_timeout_sec == 30.0
+    assert settings.transport_retries == 1
+
+
+def test_settings_network_policy_from_env(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_REQUEST_TIMEOUT_SEC", "5.5")
+    monkeypatch.setenv("YOUTUBE_TRANSPORT_RETRIES", "3")
+    settings = Settings.load()
+    assert settings.request_timeout_sec == 5.5
+    assert settings.transport_retries == 3
+
+
+def test_settings_timeout_zero_means_disabled(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_REQUEST_TIMEOUT_SEC", "0")
+    settings = Settings.load()
+    assert settings.request_timeout_sec is None
+
+
+def test_toolkit_receives_network_policy(monkeypatch):
+    """Flag fidelity: the Settings values actually reach the constructor."""
+    monkeypatch.setattr(
+        cli.Settings,
+        "load",
+        staticmethod(
+            lambda env_file=None: Settings(
+                api_key=None,
+                download_dir=Path("/tmp/youtube-cli-test"),
+                request_timeout_sec=7.0,
+                transport_retries=2,
+            )
+        ),
+    )
+    captured = {}
+
+    def _fake_toolkit(**kwargs):
+        captured.update(kwargs)
+        return MagicMock()
+
+    monkeypatch.setattr(cli, "YouTubeToolkit", _fake_toolkit)
+    cli._toolkit()
+    assert captured == {"request_timeout_sec": 7.0, "transport_retries": 2}
