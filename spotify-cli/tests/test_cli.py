@@ -194,6 +194,19 @@ def test_my_playlists_json_prints_model_list(monkeypatch, tmp_path) -> None:
     ]
 
 
+def test_playlist_create_json_prints_created_playlist(monkeypatch, tmp_path) -> None:
+    class _FakeClient:
+        def create_playlist(self, name, *, public, description):
+            return Playlist(id="p1", name=name, uri="spotify:playlist:p1", public=public, description=description)
+
+    monkeypatch.setattr("spotify_cli.cli._settings", lambda: _settings_no_session(tmp_path))
+    monkeypatch.setattr("spotify_cli.cli._live_client", lambda settings: _FakeClient())
+    result = runner.invoke(app, ["playlist-create", "Breaks Inbox", "--json"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.output)["id"] == "p1"
+
+
 def test_playlist_remove_calls_client_with_all_uris(monkeypatch, tmp_path) -> None:
     captured: dict = {}
 

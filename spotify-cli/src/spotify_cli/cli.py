@@ -380,6 +380,7 @@ def playlist_create(
     name: str = typer.Argument(..., help="New playlist name."),
     public: bool = typer.Option(False, help="Make it public (default private)."),
     description: str = typer.Option(None, help="Optional description."),
+    json_output: bool = typer.Option(False, "--json", help="Print stable JSON instead of Rich tables."),
 ) -> None:
     """Create a playlist (needs playlist-modify-private/-public)."""
     def _run(c: Client):
@@ -390,7 +391,12 @@ def playlist_create(
         console.print(f"[green]Created playlist[/] {escape(pl.name)} — id {pl.id}")
         return [render.playlists_table((pl,), title="Created")]
 
-    _catalog_one(_run, _tables)
+    playlist = _with_client(_run)
+    if json_output:
+        print(json.dumps(_json_value(playlist), ensure_ascii=False))
+        return
+    for table in _tables(playlist):
+        console.print(table)
 
 
 @app.command(name="playlist-add")
