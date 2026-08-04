@@ -124,3 +124,30 @@ def test_top_items_unknown_kind_raises_without_network(monkeypatch) -> None:
     monkeypatch.setattr(client_module.httpx, "request", _boom)
     with pytest.raises(SpotifyApiError):
         Client(_session()).top_items("albums", time_range="medium")
+
+
+def test_remove_from_playlist_uses_current_items_endpoint_and_item_objects(monkeypatch) -> None:
+    captured: dict = {}
+
+    def _fake_request(method, url, **kw):
+        captured["method"] = method
+        captured["url"] = url
+        captured["json"] = kw.get("json")
+        return _Resp(200, {"snapshot_id": "snap-2"})
+
+    monkeypatch.setattr(client_module.httpx, "request", _fake_request)
+    Client(_session()).remove_from_playlist(
+        "playlist-1",
+        ("spotify:track:t1", "spotify:track:t2"),
+    )
+
+    assert captured == {
+        "method": "DELETE",
+        "url": "https://api.spotify.com/v1/playlists/playlist-1/items",
+        "json": {
+            "items": [
+                {"uri": "spotify:track:t1"},
+                {"uri": "spotify:track:t2"},
+            ]
+        },
+    }

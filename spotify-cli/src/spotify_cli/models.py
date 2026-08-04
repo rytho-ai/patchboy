@@ -4,7 +4,7 @@ NOT a raw mirror of Spotify's JSON. A field rename or reshape upstream (Spotify
 has done several — see the Feb 2026 changes) is absorbed by a one-line map in
 the caged client.py, invisible here. Keep these minimal: only the fields the CLI
 actually renders. `uri` is carried everywhere because the write endpoints
-(save/remove, playlist-add) take Spotify URIs, not bare ids.
+(save/remove and playlist mutations) take Spotify URIs, not bare ids.
 """
 
 from __future__ import annotations

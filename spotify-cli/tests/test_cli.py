@@ -69,7 +69,14 @@ def test_login_failure_is_clean_exit_1_not_a_raw_traceback(monkeypatch, tmp_path
 def test_help_lists_both_tiers() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for cmd in ("search", "my-playlists", "playlist-create", "saved-add", "top"):
+    for cmd in (
+        "search",
+        "my-playlists",
+        "playlist-create",
+        "playlist-remove",
+        "saved-add",
+        "top",
+    ):
         assert cmd in result.output
 
 
@@ -133,3 +140,31 @@ def test_top_help_lists_options() -> None:
     assert result.exit_code == 0
     for opt in ("--type", "--range", "--limit"):
         assert opt in result.output
+
+
+def test_playlist_remove_calls_client_with_all_uris(monkeypatch, tmp_path) -> None:
+    captured: dict = {}
+
+    class _FakeClient:
+        def remove_from_playlist(self, playlist_id, uris):
+            captured["playlist_id"] = playlist_id
+            captured["uris"] = uris
+
+    monkeypatch.setattr("spotify_cli.cli._settings", lambda: _settings_no_session(tmp_path))
+    monkeypatch.setattr("spotify_cli.cli._live_client", lambda settings: _FakeClient())
+    result = runner.invoke(
+        app,
+        [
+            "playlist-remove",
+            "playlist-1",
+            "spotify:track:t1",
+            "spotify:track:t2",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == {
+        "playlist_id": "playlist-1",
+        "uris": ("spotify:track:t1", "spotify:track:t2"),
+    }
+    assert "Removed 2 track(s) from playlist-1." in result.output

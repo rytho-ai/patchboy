@@ -371,6 +371,18 @@ def playlist_add(
     _mutate(lambda c: c.add_to_playlist(playlist_id, tuple(uris)), f"Added {len(uris)} track(s) to {playlist_id}.")
 
 
+@app.command(name="playlist-remove")
+def playlist_remove(
+    playlist_id: str = typer.Argument(..., help="Target playlist id."),
+    uris: list[str] = typer.Argument(..., help="Spotify track URIs to remove."),
+) -> None:
+    """Remove tracks from a playlist by URI (needs playlist-modify-*)."""
+    _mutate(
+        lambda c: c.remove_from_playlist(playlist_id, tuple(uris)),
+        f"Removed {len(uris)} track(s) from {playlist_id}.",
+    )
+
+
 # ---- shared command bodies -------------------------------------------------
 
 

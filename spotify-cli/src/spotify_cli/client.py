@@ -187,6 +187,12 @@ class Client:
         # Verified live 2026-07-20: /items → 201. The old /tracks path now 403s.
         self._request("POST", f"/playlists/{playlist_id}/items", json={"uris": list(uris)})
 
+    def remove_from_playlist(self, playlist_id: str, uris: tuple[str, ...]) -> None:
+        # Feb 2026: DELETE /items takes item objects, unlike POST /items' flat URI list.
+        # The old DELETE /tracks endpoint is deprecated and no longer the supported wire shape.
+        items = [{"uri": uri} for uri in uris]
+        self._request("DELETE", f"/playlists/{playlist_id}/items", json={"items": items})
+
     def save_tracks(self, uris: tuple[str, ...]) -> None:
         # Verified live 2026-07-20: PUT /me/library with `uris` as a COMMA-SEPARATED
         # QUERY param (not a JSON body — a JSON body 400s "Missing required field").
