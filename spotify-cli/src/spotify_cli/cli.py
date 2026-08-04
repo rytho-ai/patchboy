@@ -12,7 +12,9 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from collections.abc import Callable, Iterator
-from typing import Any, NoReturn
+from dataclasses import asdict, is_dataclass
+import json
+from typing import Any, NoReturn, cast
 
 import typer
 from rich.console import Console
@@ -208,6 +210,7 @@ def search(
     limit: int = typer.Option(10, help="Max results per type (Spotify caps at 10)."),
     year: str = typer.Option(None, help="Server-side year filter: YYYY or a YYYY-YYYY range."),
     genre: str = typer.Option(None, help="Server-side genre filter, e.g. 'jazz'."),
+    json_output: bool = typer.Option(False, "--json", help="Print stable JSON instead of Rich tables."),
 ) -> None:
     """Search the catalog (tracks/albums/artists/playlists).
 
@@ -218,6 +221,9 @@ def search(
     results = _with_client(
         lambda c: c.search(query, types, _clamp_search_limit(limit), year=year, genre=genre)
     )
+    if json_output:
+        print(json.dumps(_json_value(results), ensure_ascii=False))
+        return
     tables = render.search_tables(results)
     if not tables:
         console.print("[yellow]No results.[/]")
@@ -258,6 +264,7 @@ def playlist_get(
     until: str = _UNTIL,
     release_year: str = _RELEASE_YEAR,
     artist: str = _ARTIST,
+    json_output: bool = typer.Option(False, "--json", help="Print stable JSON instead of Rich tables."),
 ) -> None:
     """Get a playlist's metadata (and items, if you own/collaborate on it).
 
@@ -272,22 +279,46 @@ def playlist_get(
         )
         return detail, items
 
+    result = _with_client(run)
+    if json_output:
+        detail, items = result
+        print(
+            json.dumps(
+                {
+                    "playlist": _json_value(detail.playlist),
+                    "itemsVisible": detail.items_visible,
+                    "snapshotId": detail.snapshot_id,
+                    "items": _json_value(items),
+                },
+                ensure_ascii=False,
+            )
+        )
+        return
+
     def _tables(result):
         detail, items = result
         if not detail.items_visible:
             console.print("[yellow]Items hidden — Spotify only returns items for playlists you own or collaborate on.[/]")
         return render.playlist_detail_tables(detail, items=items)
 
-    _catalog_one(run, _tables)
+    for table in _tables(result):
+        console.print(table)
 
 
 # ---- user-account commands -------------------------------------------------
 
 
 @app.command(name="my-playlists")
-def my_playlists(limit: int = typer.Option(20, help="Max playlists.")) -> None:
+def my_playlists(
+    limit: int = typer.Option(20, help="Max playlists."),
+    json_output: bool = typer.Option(False, "--json", help="Print stable JSON instead of Rich tables."),
+) -> None:
     """List your own playlists (needs playlist-read-private)."""
-    _catalog_one(lambda c: c.my_playlists(limit), lambda r: [render.playlists_table(r, title="My playlists")])
+    playlists = _with_client(lambda c: c.my_playlists(limit))
+    if json_output:
+        print(json.dumps(_json_value(playlists), ensure_ascii=False))
+        return
+    console.print(render.playlists_table(playlists, title="My playlists"))
 
 
 @app.command()
@@ -403,6 +434,19 @@ def _catalog_one(run: Callable[[Client], Any], to_tables) -> None:
     result = _with_client(run)
     for t in to_tables(result):
         console.print(t)
+
+
+def _json_value(value: Any) -> Any:
+    """Convert frozen model vocabulary to JSON without exposing Spotify wire JSON."""
+    if is_dataclass(value):
+        return {key: _json_value(item) for key, item in asdict(cast(Any, value)).items()}
+    if isinstance(value, tuple):
+        return [_json_value(item) for item in value]
+    if isinstance(value, list):
+        return [_json_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _json_value(item) for key, item in value.items()}
+    return value
 
 
 def _mutate(run: Callable[[Client], Any], ok_message: str) -> None:

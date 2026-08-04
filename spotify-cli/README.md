@@ -49,17 +49,20 @@ spotify status                      # is the session fresh?
 
 # catalog
 spotify search "aphex twin" --type track,album --limit 10
+spotify search "aphex twin" --type track --json  # stable machine-readable output
 spotify search "lofi" --year 2015-2020 --genre "hip-hop"   # server-side filters
 spotify track   <track_id>
 spotify album   <album_id>
 spotify artist  <artist_id>
 spotify playlist-get <playlist_id> [--since 2026-01 --release-year 2020-2024 --artist nujabes]
+spotify playlist-get <playlist_id> --json       # all visible items, stable machine-readable output
 
 # your account
 spotify my-playlists
 spotify saved [--limit 50] [--since 2026-07-01] [--until 2026-07-31] [--release-year 2024] [--artist "soft lipa"]
 spotify saved-add    spotify:track:<id> ...
 spotify saved-remove spotify:track:<id> ...
+spotify my-playlists --json
 spotify playlist-create "My Mix" --description "..."
 spotify playlist-add <playlist_id> spotify:track:<id> ...
 spotify playlist-remove <playlist_id> spotify:track:<id> ...

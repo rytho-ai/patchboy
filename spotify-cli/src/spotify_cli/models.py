@@ -79,3 +79,4 @@ class PlaylistDetail:
     # which case this is so the CLI can say so instead of showing an empty list.
     items_visible: bool
     items: tuple[SavedTrack, ...] = field(default_factory=tuple)
+    snapshot_id: str | None = None

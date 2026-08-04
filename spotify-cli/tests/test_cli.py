@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 from typer.testing import CliRunner
 
@@ -10,7 +11,7 @@ from spotify_cli import auth as auth_module
 from spotify_cli.auth import SpotifyAuthError
 from spotify_cli.cli import app
 from spotify_cli.config import Settings
-from spotify_cli.models import Artist, Track
+from spotify_cli.models import Artist, Playlist, SearchResults, Track
 
 runner = CliRunner()
 
@@ -140,6 +141,57 @@ def test_top_help_lists_options() -> None:
     assert result.exit_code == 0
     for opt in ("--type", "--range", "--limit"):
         assert opt in result.output
+
+
+def test_search_json_prints_model_shape(monkeypatch, tmp_path) -> None:
+    class _FakeClient:
+        def search(self, query, types, limit, *, year, genre):
+            return SearchResults(tracks=(Track(id="t1", name="One", uri="spotify:track:t1"),))
+
+    monkeypatch.setattr("spotify_cli.cli._settings", lambda: _settings_no_session(tmp_path))
+    monkeypatch.setattr("spotify_cli.cli._live_client", lambda settings: _FakeClient())
+    result = runner.invoke(app, ["search", "one", "--json"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.output) == {
+        "tracks": [
+            {
+                "id": "t1",
+                "name": "One",
+                "uri": "spotify:track:t1",
+                "artists": [],
+                "album": None,
+                "duration_ms": None,
+                "release_date": None,
+            }
+        ],
+        "albums": [],
+        "artists": [],
+        "playlists": [],
+    }
+
+
+def test_my_playlists_json_prints_model_list(monkeypatch, tmp_path) -> None:
+    class _FakeClient:
+        def my_playlists(self, limit):
+            return (Playlist(id="p1", name="Breaks Inbox", uri="spotify:playlist:p1"),)
+
+    monkeypatch.setattr("spotify_cli.cli._settings", lambda: _settings_no_session(tmp_path))
+    monkeypatch.setattr("spotify_cli.cli._live_client", lambda settings: _FakeClient())
+    result = runner.invoke(app, ["my-playlists", "--json"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.output) == [
+        {
+            "id": "p1",
+            "name": "Breaks Inbox",
+            "uri": "spotify:playlist:p1",
+            "owner": None,
+            "total_tracks": None,
+            "public": None,
+            "description": None,
+        }
+    ]
 
 
 def test_playlist_remove_calls_client_with_all_uris(monkeypatch, tmp_path) -> None:

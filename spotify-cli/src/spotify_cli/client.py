@@ -65,9 +65,10 @@ class Client:
     # ---- low-level ---------------------------------------------------------
 
     def _request(self, method: str, path: str, **kw) -> dict:
+        url = path if path.startswith("http") else f"{_BASE}{path}"
         resp = httpx.request(
             method,
-            f"{_BASE}{path}",
+            url,
             headers=self._session.auth_header,
             timeout=15,
             **kw,
@@ -130,23 +131,57 @@ class Client:
         return _artist(self._get(f"/artists/{artist_id}"))
 
     def playlist(self, playlist_id: str) -> PlaylistDetail:
-        data = self._get(f"/playlists/{playlist_id}")
+        data = self._get(f"/playlists/{playlist_id}", params={"limit": 50})
         pl = _playlist(data)
         # verify-live: Feb 2026 renamed /tracks → /items and narrowed visibility
         # (full items only for playlists you own/collaborate on). Absent items
         # object → metadata-only, not an empty playlist.
         items_field = data.get("items") or data.get("tracks")
         if items_field is None:
-            return PlaylistDetail(playlist=pl, items_visible=False)
+            return PlaylistDetail(playlist=pl, items_visible=False, snapshot_id=data.get("snapshot_id"))
         rows = items_field.get("items", []) if isinstance(items_field, dict) else []
+        next_url = items_field.get("next") if isinstance(items_field, dict) else None
+        seen_urls: set[str] = set()
+        while next_url:
+            if next_url in seen_urls:
+                raise SpotifyApiError("Spotify returned a repeated playlist page URL")
+            seen_urls.add(next_url)
+            page = self._get(next_url)
+            page_items = page.get("items") or page.get("tracks") or {}
+            if isinstance(page_items, dict):
+                rows.extend(page_items.get("items", []))
+                next_url = page_items.get("next") or page.get("next")
+            elif isinstance(page_items, list):
+                rows.extend(page_items)
+                next_url = page.get("next")
+            else:
+                break
         items = tuple(_saved(r) for r in rows if (r.get("item") or r.get("track")))
-        return PlaylistDetail(playlist=pl, items_visible=True, items=items)
+        return PlaylistDetail(
+            playlist=pl,
+            items_visible=True,
+            items=items,
+            snapshot_id=data.get("snapshot_id"),
+        )
 
     # ---- user account ------------------------------------------------------
 
     def my_playlists(self, limit: int = 20) -> tuple[Playlist, ...]:
-        data = self._get("/me/playlists", params={"limit": limit})
-        return tuple(_playlist(p) for p in data.get("items", []))
+        target = max(0, limit)
+        if target == 0:
+            return ()
+        data = self._get("/me/playlists", params={"limit": min(target, 50), "offset": 0})
+        rows = list(data.get("items", []))
+        next_url = data.get("next")
+        seen_urls: set[str] = set()
+        while next_url and len(rows) < target:
+            if next_url in seen_urls:
+                raise SpotifyApiError("Spotify returned a repeated playlist page URL")
+            seen_urls.add(next_url)
+            page = self._get(next_url)
+            rows.extend(page.get("items", []))
+            next_url = page.get("next")
+        return tuple(_playlist(p) for p in rows[:target])
 
     def saved_tracks(self, limit: int = 20) -> tuple[SavedTrack, ...]:
         data = self._get("/me/tracks", params={"limit": min(limit, 50)})

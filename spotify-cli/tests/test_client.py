@@ -151,3 +151,72 @@ def test_remove_from_playlist_uses_current_items_endpoint_and_item_objects(monke
             ]
         },
     }
+
+
+def test_playlist_follows_next_pages_and_preserves_snapshot(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def _fake_request(method, url, **kw):
+        calls.append(url)
+        if url.endswith("/playlists/p1"):
+            return _Resp(
+                200,
+                {
+                    "id": "p1",
+                    "name": "Breaks Inbox",
+                    "uri": "spotify:playlist:p1",
+                    "items": {
+                        "items": [
+                            {
+                                "added_at": "2026-08-01",
+                                "item": {"id": "t1", "name": "One", "uri": "spotify:track:t1"},
+                            }
+                        ],
+                        "next": "https://api.spotify.com/v1/playlists/p1/items?offset=1",
+                    },
+                    "snapshot_id": "snap-1",
+                },
+            )
+        return _Resp(
+            200,
+            {
+                "items": [
+                    {
+                        "added_at": "2026-08-02",
+                        "item": {"id": "t2", "name": "Two", "uri": "spotify:track:t2"},
+                    }
+                ],
+                "next": None,
+            },
+        )
+
+    monkeypatch.setattr(client_module.httpx, "request", _fake_request)
+    result = Client(_session()).playlist("p1")
+
+    assert [item.track.id for item in result.items] == ["t1", "t2"]
+    assert result.snapshot_id == "snap-1"
+    assert calls == [
+        "https://api.spotify.com/v1/playlists/p1",
+        "https://api.spotify.com/v1/playlists/p1/items?offset=1",
+    ]
+
+
+def test_my_playlists_follows_next_pages_until_limit(monkeypatch) -> None:
+    def _fake_request(method, url, **kw):
+        if url.endswith("/me/playlists"):
+            return _Resp(
+                200,
+                {
+                    "items": [{"id": "p1", "name": "One", "uri": "spotify:playlist:p1"}],
+                    "next": "https://api.spotify.com/v1/me/playlists?offset=1",
+                },
+            )
+        return _Resp(
+            200,
+            {"items": [{"id": "p2", "name": "Two", "uri": "spotify:playlist:p2"}], "next": None},
+        )
+
+    monkeypatch.setattr(client_module.httpx, "request", _fake_request)
+    result = Client(_session()).my_playlists(limit=2)
+
+    assert [playlist.id for playlist in result] == ["p1", "p2"]
